@@ -1,71 +1,78 @@
 package raft
 
 import (
-	"container/list"
-	"errors"
-	"fmt"
-	"reflect"
 	"time"
 )
 
-type Cluster struct {
-	Nodes map[int]*RaftNode
+type Delay struct {
+	delay         int64 // delay in microseconds
+	inputChannel  chan interface{}
+	outputChannel chan interface{}
 }
 
-func (nw *Cluster) NodesCount() int {
-	return len(nw.Nodes)
+type Router struct {
+	incomingChannel chan interface{}
+	routes          map[int]*chan interface{}
 }
 
-func (nw *Cluster) NodeAdd(node *RaftNode) {
-	nw.Nodes[node.Node.Id] = node
-}
+func (rn *RaftNode) send(msg interface{}) error {
 
-func (nw *Cluster) GetNodes() *list.List {
-	nodes := list.New()
-	for _, n := range nw.Nodes {
-		nodes.PushBack(n)
-	}
-	return nodes
-}
-
-func (nw *Cluster) send(srcId, dstId int, msg Event) error {
-	if srcId > 0 {
-		fmt.Printf("Network: send from %d to %d msg=%v \n", srcId, dstId, reflect.TypeOf(msg.Inner))
-	}
-	rn, ok := nw.Nodes[dstId]
-	if !ok {
-		return errors.New("not found")
-	}
-
-	ch := rn.Node.IncommingChan
+	ch := rn.Node.OutgoingChan
 	ch <- msg
 	return nil
 }
 
-func (nw *Cluster) sendAll(srcId int, msg Event) error {
-	for _, rn := range nw.Nodes {
-		if rn.Node.Id != srcId {
-			nw.send(srcId, rn.Id, msg)
-		}
+func CreateDelay(delay int64, incoming chan interface{}, outgoing chan interface{}) *Delay {
+	if incoming == nil {
+		incoming = make(chan interface{}, CHANNELSIZE)
+	}
+	if outgoing == nil {
+		outgoing = make(chan interface{}, CHANNELSIZE)
 	}
 
-	return nil
+	return &Delay{delay: delay, inputChannel: incoming, outputChannel: outgoing}
 }
 
-var network Cluster = Cluster{Nodes: make(map[int]*RaftNode)}
-
-func ClusterInstance() *Cluster {
-	return &network
-}
-
-func TimeoutTick(tmMs int) {
+func (d *Delay) run() {
 	for {
-		time.Sleep(time.Duration(int64(tmMs) * int64(time.Millisecond)))
+		x := <-d.inputChannel
+		msg := x.(MsgEvent)
 
-		msg := Event{Term: 0, Inner: TimerTick{}}
-		err := ClusterInstance().sendAll(0, msg)
-		if err != nil {
-			panic("Can'not send timer tick event")
+		current := time.Now()
+		targetTs := msg.ts.Add(time.Duration(d.delay) * time.Millisecond)
+		sleepDuration := targetTs.Sub(current)
+		if sleepDuration > 0 {
+			time.Sleep(sleepDuration)
 		}
+
+		d.outputChannel <- msg
 	}
+}
+
+func CreateRouter(incomingChan chan interface{}) *Router {
+	if incomingChan == nil {
+		incomingChan = make(chan interface{}, 1000000)
+	}
+
+	return &Router{incomingChannel: incomingChan, routes: make(map[int]*chan interface{})}
+}
+
+func (r *Router) AddRoute(id int, channel chan interface{}) {
+	r.routes[id] = &channel
+}
+
+func (r *Router) run() {
+	initTrace()
+	for {
+		x := <-r.incomingChannel
+		msg := x.(MsgEvent)
+		trace(msg)
+		channel := *r.routes[msg.dstid]
+
+		channel <- x
+	}
+}
+
+func msg(srcId int, dstId int, body interface{}) MsgEvent {
+	return MsgEvent{srcid: srcId, dstid: dstId, body: body, ts: time.Now()}
 }

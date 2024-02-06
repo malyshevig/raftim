@@ -2,31 +2,48 @@ package raft
 
 import (
 	"fmt"
-	"math/rand"
+	"log"
+	"os"
+	"reflect"
 	"time"
 )
 
 const (
-	FollowerLeaderIdleBaseTimeout = 10
+	FollowerLeaderIdleBaseTimeout = 10000
 	CandidateElectionTimeout      = FollowerLeaderIdleBaseTimeout / 2
 	LeaderPingInterval            = FollowerLeaderIdleBaseTimeout / 2
 )
 
-func FollowerLeaderIdleTimeout() int {
-	dev := 2
-	return FollowerLeaderIdleBaseTimeout - dev + rand.Intn(2*dev)
-}
-
 type Node struct {
-	Id            int
-	IncommingChan chan Event
+	Id           int
+	IncomingChan chan interface{}
+	OutgoingChan chan interface{}
 }
 
 const (
 	Leader    = "leader"
 	Candidate = "candidate"
 	Follower  = "follower"
+	Active    = "active"
 )
+
+type Entry struct {
+	term int64
+	cmd  string
+}
+
+type FollowerInfo struct {
+	id           int
+	lastRequest  time.Time
+	lastResponse time.Time
+
+	nextIndex int
+}
+
+type LeaderInfo struct {
+	id           int
+	leaderLastTS time.Time
+}
 
 type RaftNode struct {
 	Node
@@ -38,14 +55,43 @@ type RaftNode struct {
 	candidateElectionTs  time.Time
 	followerLeaderIdleTs time.Time
 	leaderPingTs         time.Time
+
+	followers            map[int]*FollowerInfo
+	followersCommmitInfo CommitInfo
+	leader               LeaderInfo
+
+	Status        string
+	CmdLog        []Entry
+	commitInfo    *CommitInfo
+	commitedIndex int
+
+	electionTimeoutMS int
+	followerTimeoutMS int
+
+	pingNum int
+	ae_id   int
 }
 
-func NewNode(id int) *RaftNode {
+func NewNode(id int, r rnd, incomingChan chan interface{}, outgoingChan chan interface{}) *RaftNode {
+	fname := getLogName(id)
+	f, err := os.Create(fname)
+	if err != nil {
+		log.Fatal(err)
+	}
+	f.Close()
+
 	return &RaftNode{
-		Node:        Node{Id: id, IncommingChan: make(chan Event, 10000)},
-		CurrentTerm: 1,
-		State:       Follower,
-		VotedFor:    id,
+		Node:          Node{Id: id, IncomingChan: incomingChan, OutgoingChan: outgoingChan},
+		CurrentTerm:   1,
+		State:         Follower,
+		Status:        Active,
+		VotedFor:      id,
+		commitedIndex: -1,
+		CmdLog:        make([]Entry, 0),
+		followers:     make(map[int]*FollowerInfo),
+
+		electionTimeoutMS: r.RandomTimeoutMs(CandidateElectionTimeout),
+		followerTimeoutMS: r.RandomTimeoutMs(FollowerLeaderIdleBaseTimeout),
 	}
 }
 
@@ -56,186 +102,60 @@ func (rn *RaftNode) init() {
 	rn.candidateElectionTs = ZeroTime()
 
 	rn.switchToFollower()
-	//ev := Event{rn.CurrentTerm, IdleTimeout{time.Now()}}
-	//go Timer(int64(RandomTimeout(5, 10)), ev, rn.Node.IncommingChan)
 }
 
-func (rn *RaftNode) nextEvent() *Event {
+func (rn *RaftNode) nextEvent() interface{} {
 
-	ev := <-rn.IncommingChan
-	return &ev
+	// block if status inactive
+	for rn.Status != Active {
+		time.Sleep(time.Duration(500) * time.Millisecond)
+	}
+
+	ev := <-rn.IncomingChan
+
+	types := reflect.TypeOf(ev)
+	if types.String() != "raft.SystemEvent" {
+		rn.print(fmt.Sprintf("received %s", reflect.TypeOf(ev)))
+	}
+
+	if msg, ok := ev.(MsgEvent); ok {
+		rn.print(fmt.Sprintf(" --------- recieved msg from %d", msg.srcid))
+	}
+	return ev
 }
 
 func (rn *RaftNode) run() {
-	defer rn.print("(4) run exit")
+	defer rn.print("run exit")
 	rn.init()
 	for {
 		ev := rn.nextEvent()
-		if ev.Term > 0 {
-			rn.print(" (5) received Event term=%d \n", ev.Term)
+
+		//rn.print(fmt.Sprintf("start process event %s\n", reflect.TypeOf(ev)))
+		switch rn.State {
+		case Leader:
+			rn.leaderProcessEvent(ev)
+			break
+		case Follower:
+			rn.followerProcessEvent(ev)
+			break
+		case Candidate:
+			rn.candidateProcessEvent(ev)
+			break
+
 		}
-		if ev.Term == 0 || ev.Term >= rn.CurrentTerm {
-			switch rn.State {
-			case Leader:
-				rn.leaderProcessEvent(ev)
-				break
-
-			case Follower:
-				rn.followerProcessEvent(ev)
-				break
-			case Candidate:
-				rn.candidateProcessEvent(ev)
-				break
-
-			}
-		} else {
-			rn.print("(6) current_term= %d received_term = %d skipping", rn.CurrentTerm, ev.Term)
-		}
-
+		//rn.print(fmt.Sprintf("finish process event %s\n", reflect.TypeOf(ev)))
 	}
-
 }
 
 func (rn *RaftNode) grantVote(newLeaderId int, newTerm int64) {
+	rs := fmt.Sprintf("node %d vote for %d\n", rn.Id, newLeaderId)
+	rn.print(rs)
+
 	rn.VotedFor = newLeaderId
 	rn.CurrentTerm = newTerm
-	ev := Event{Term: rn.CurrentTerm, Inner: VoteResponse{rn.Id}}
-	ClusterInstance().send(rn.Id, newLeaderId, ev)
-}
-
-func (rn *RaftNode) leaderProcessEvent(ev *Event) {
-	if vr, ok := ev.Inner.(VoteRequest); ok {
-		if rn.CurrentTerm < ev.Term {
-			rn.switchToFollower()
-			rn.grantVote(vr.srcId, ev.Term)
-		}
-	}
-
-	if rn.CurrentTerm < ev.Term {
-		rn.CurrentTerm = ev.Term
-		rn.switchToFollower()
-	}
-
-	if _, ok := ev.Inner.(TimerTick); ok { // Idle Timeout
-		if IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
-			ping := Event{rn.CurrentTerm, PingRequest{srcId: rn.Id}}
-			rn.leaderPingTs = time.Now()
-			ClusterInstance().sendAll(rn.Node.Id, ping)
-		}
-	}
-
-	return
-}
-
-func (rn *RaftNode) followerProcessEvent(ev *Event) {
-
-	if _, ok := ev.Inner.(TimerTick); ok { // Idle Timeout
-		if IsTimeout(rn.followerLeaderIdleTs, time.Now(), FollowerLeaderIdleTimeout()) {
-			rn.switchToCandidate()
-			return
-		}
-	}
-
-	if vr, ok := ev.Inner.(VoteRequest); ok {
-		if rn.CurrentTerm < ev.Term {
-			rn.switchToFollower()
-			rn.grantVote(vr.srcId, ev.Term)
-		}
-
-		return
-	}
-
-	if vr, ok := ev.Inner.(PingRequest); ok {
-		if rn.CurrentTerm < ev.Term {
-			rn.CurrentTerm = ev.Term
-			rn.VotedFor = vr.srcId
-			rn.switchToFollower()
-		}
-		ClusterInstance().send(rn.Id, vr.srcId, Event{rn.CurrentTerm, PingResponse{srcId: rn.Id}})
-		rn.followerLeaderIdleTs = time.Now()
-		return
-	}
-
-	return
-}
-
-func (rn *RaftNode) candidateProcessEvent(ev *Event) {
-	if _, ok := ev.Inner.(TimerTick); ok { // Idle Timeout
-		if IsTimeout(rn.candidateElectionTs, time.Now(), CandidateElectionTimeout) {
-			rn.switchToFollower()
-			return
-		}
-	}
-
-	if vr, ok := ev.Inner.(VoteRequest); ok {
-		if rn.CurrentTerm < ev.Term {
-			rn.CurrentTerm = ev.Term
-			rn.VotedFor = vr.srcId
-			rn.VoteCount = 0
-			event := Event{Term: rn.CurrentTerm, Inner: VoteResponse{srcId: rn.Node.Id}}
-			ClusterInstance().send(rn.Id, vr.srcId, event)
-		}
-
-		return
-	}
-
-	if vr, ok := ev.Inner.(VoteResponse); ok {
-		if rn.CurrentTerm == ev.Term {
-			rn.CurrentTerm = ev.Term
-			rn.VoteCount++
-			if rn.VoteCount > ClusterInstance().NodesCount()/2 {
-				rn.switchToLeader()
-			}
-
-		} else {
-			rn.print("(1) Candidate received unexpected response from %d", vr.srcId)
-		}
-
-		return
-	}
-}
-
-func (rn *RaftNode) switchToCandidate() {
-	rn.print("(7) switch to candidate \n")
-	rn.CurrentTerm++
-	rn.State = Candidate
-	rn.VotedFor = rn.Id
-	rn.VoteCount = 1
-	event := Event{Term: rn.CurrentTerm, Inner: VoteRequest{srcId: rn.Node.Id}}
-	rn.candidateElectionTs = time.Now()
-
-	if err := ClusterInstance().sendAll(rn.Node.Id, event); err != nil {
-		fmt.Println("Can't send message d", err)
-	}
-
-	//rn.timerCandidate()
-}
-
-func (rn *RaftNode) switchToLeader() {
-	rn.print("(9) switch to Leader \n")
-
-	rn.State = Leader
-	rn.leaderPingTs = time.Now()
-
-	ping := Event{rn.CurrentTerm, PingRequest{srcId: rn.Id}}
-	ClusterInstance().sendAll(rn.Node.Id, ping)
-
-	//rn.timerLeader()
-}
-
-func (rn *RaftNode) switchToFollower() {
-	rn.print("(8) switch to Follower \n")
-	rn.followerLeaderIdleTs = time.Now()
-	rn.State = Follower
-}
-
-func (rn *RaftNode) print(fs string, params ...any) {
-	fmt.Printf("Node%d (state=%s) (currentTerm = %d):  ", rn.Id, rn.State, rn.CurrentTerm)
-	if len(params) > 0 {
-		fmt.Printf(fs, params)
-	} else {
-		fmt.Print(fs)
-	}
+	//ev := MsgEvent{srcid: rn.Id, dstid: newLeaderId, body: VoteResponse{success: true, term: newTerm}}
+	ev := msg(rn.Id, newLeaderId, VoteResponse{success: true, term: newTerm})
+	rn.send(ev)
 }
 
 func (rn *RaftNode) switchToState(newState string) error {
@@ -254,4 +174,18 @@ func (rn *RaftNode) switchToState(newState string) error {
 	}
 
 	return nil
+}
+
+func (rn *RaftNode) AppendCommand(cmd string) {
+	rn.IncomingChan <- ClientEvent{clientId: "client", body: ClientCommand{cmd: cmd}}
+}
+
+func (rn *RaftNode) switchToFollower() {
+	rn.print("(8) switch to Follower \n")
+	rn.followerLeaderIdleTs = time.Now()
+	rn.State = Follower
+}
+
+func (rn *RaftNode) getFollower(srcid int) *FollowerInfo {
+	return rn.followers[srcid]
 }

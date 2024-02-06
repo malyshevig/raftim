@@ -1,6 +1,9 @@
 package main
 
-import "raft/raft"
+import (
+	_ "raft/docs"
+	"raft/raft"
+)
 
 func main() {
 	raft.Raft()
