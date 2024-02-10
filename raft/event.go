@@ -40,8 +40,13 @@ func (v VoteRequest) String() string {
 }
 
 type VoteResponse struct {
-	term    int64
-	success bool
+	term         int64
+	lastLogIndex int
+	success      bool
+}
+
+func NewVoteResponse(term int64, lastLogIndex int, success bool) *VoteResponse {
+	return &VoteResponse{term: term, lastLogIndex: lastLogIndex, success: success}
 }
 
 func (v VoteResponse) String() string {
@@ -76,5 +81,21 @@ func (v AppendEntriesResponse) String() string {
 
 // ClientEvents
 type ClientCommand struct {
+	id  int64
 	cmd string
+}
+
+func NewClientCommand(cmd string) *ClientCommand {
+	return &ClientCommand{cmd: cmd}
+}
+
+type ClientCommendResponse struct {
+	cmdId   int64
+	success bool
+
+	leaderid int
+}
+
+func NewClientCommendResponse(success bool) *ClientCommendResponse {
+	return &ClientCommendResponse{success: success}
 }

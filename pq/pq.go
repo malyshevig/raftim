@@ -46,6 +46,7 @@ func (pq *PriorityQueue) Push(x any) {
 	item := x.(*Item)
 	item.index = n
 	*pq = append(*pq, item)
+
 }
 
 func (pq *PriorityQueue) Pop() any {

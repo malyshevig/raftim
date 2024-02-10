@@ -8,15 +8,25 @@ const (
 	CHANNELSIZE = 1000000
 )
 
-// IncomingChan: make(chan interface{}, 1000000)
+// incomingChan: make(chan interface{}, 1000000)
 func createNode(id int, r *Router, rbase rnd) *RaftNode {
 	routerToNode := make(chan interface{}, CHANNELSIZE)
 	delay := CreateDelay(1000, nil, r.incomingChannel)
 	node := NewNode(id, rbase, routerToNode, delay.inputChannel)
-	r.AddRoute(node.Id, routerToNode)
+	r.AddRoute(node.id, routerToNode)
 
 	go delay.run()
 
+	return node
+}
+
+func createClientNode(id int, r *Router, rbase rnd) *ClientNode {
+	routerToNode := make(chan interface{}, CHANNELSIZE)
+	delay := CreateDelay(1000, nil, r.incomingChannel)
+	node := NewClientNode(id, routerToNode, delay.inputChannel)
+	r.AddRoute(node.id, routerToNode)
+
+	go delay.run()
 	return node
 }
 
@@ -25,6 +35,8 @@ func Raft() {
 	nw := ClusterInstance()
 
 	router := CreateRouter(nil)
+
+	clientNode := createClientNode(100, router, rnd)
 
 	nw.NodeAdd(createNode(1, router, rnd))
 	nw.NodeAdd(createNode(2, router, rnd))
@@ -35,12 +47,13 @@ func Raft() {
 	for rn := nw.GetNodes().Front(); rn != nil; rn = rn.Next() {
 		go rn.Value.(*RaftNode).run()
 	}
+	go clientNode.run()
 
 	go TimeoutTick(100)
 
 	server := RestServer{}
 	server.run()
 
-	go Load()
+	go Load(clientNode)
 	time.Sleep(1 * time.Hour)
 }

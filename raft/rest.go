@@ -51,7 +51,7 @@ func (server *RestServer) GetNodes() []RestNode {
 	var restNodes []RestNode
 	for n := nodes.Front(); n != nil; n = n.Next() {
 		rn := n.Value.(*RaftNode)
-		restNodes = append(restNodes, RestNode{ID: rn.Id, TERM: rn.CurrentTerm, STATE: rn.State,
+		restNodes = append(restNodes, RestNode{ID: rn.id, TERM: rn.CurrentTerm, STATE: rn.State,
 			LEADER: rn.VotedFor, STATUS: rn.Status, COMITTED_INDEX: rn.commitedIndex, LOG_LEN: len(rn.CmdLog)})
 		fmt.Printf("%v", rn)
 	}

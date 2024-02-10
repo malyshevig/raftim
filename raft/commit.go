@@ -17,6 +17,7 @@ func (cm *CommitInfo) addFollower(fv *FollowerInfo) {
 	item := pq.MakeItem(fv, fv.nextIndex-1)
 	cm.pq.Push(item)
 	cm.pqItems[fv.id] = item
+	cm.pq.Update(item, fv, fv.nextIndex-1)
 }
 
 func (cm *CommitInfo) updateFollowerIndex(fv *FollowerInfo) {

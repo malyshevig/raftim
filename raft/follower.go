@@ -13,7 +13,7 @@ func (rn *RaftNode) followerProcessEvent(ev any) {
 	}
 
 	if msg, ok := ev.(MsgEvent); ok {
-		rn.followerMsgEvent(&msg)
+		rn.followerProcessMsgEvent(&msg)
 		return
 	}
 
@@ -35,24 +35,24 @@ func (rn *RaftNode) followerProcessSystemEvent(ev *SystemEvent) {
 	}
 }
 
-func (rn *RaftNode) followerMsgEvent(msg *MsgEvent) {
+func (rn *RaftNode) followerProcessMsgEvent(message *MsgEvent) {
 
-	if vr, ok := msg.body.(VoteRequest); ok {
-		rn.followerProcessVoteRequest(msg, vr)
+	if vr, ok := message.body.(VoteRequest); ok {
+		rn.followerProcessVoteRequest(message, vr)
 		return
 	}
 
-	if ar, ok := msg.body.(AppendEntries); ok {
-		rn.followerProcessAE(msg, ar)
+	if ar, ok := message.body.(AppendEntries); ok {
+		rn.followerProcessAE(message, ar)
 		return
 	}
 
-	if _, ok := msg.body.(ClientCommand); ok {
-		//rn.print("follower received client command %s", vr.cmd)
+	if cmd, ok := message.body.(ClientCommand); ok {
+		rn.send(msg(rn.id, message.srcid, &ClientCommendResponse{cmdId: cmd.id, success: false, leaderid: rn.leader.id}))
 		return
 	}
 
-	fmt.Printf("unexpected Msg %s\n", reflect.TypeOf(msg.body))
+	fmt.Printf("unexpected Msg %s\n", reflect.TypeOf(message.body))
 
 }
 
@@ -63,11 +63,6 @@ func (rn *RaftNode) followerProcessAE(msg *MsgEvent, ar AppendEntries) {
 	}
 
 	rn.followerLeaderIdleTs = time.Now()
-	if ar.leaderCommittedIndex > rn.commitedIndex {
-		rn.saveLog(rn.commitedIndex+1, ar.leaderCommittedIndex)
-		rn.commitedIndex = ar.leaderCommittedIndex
-		rn.print(fmt.Sprintf("follower shift commitedIndex to %d", rn.commitedIndex))
-	}
 
 	if !rn.checkLog(ar.lastLogIndex, ar.lastLogTerm) {
 		rn.sendAEResponse(ar.id, msg.srcid, false)
@@ -80,6 +75,13 @@ func (rn *RaftNode) followerProcessAE(msg *MsgEvent, ar AppendEntries) {
 		rn.print(fmt.Sprintf("follower save %s\n", entry.cmd))
 		startIndex++
 	}
+
+	if ar.leaderCommittedIndex > rn.commitedIndex {
+		rn.saveLog(rn.commitedIndex+1, ar.leaderCommittedIndex)
+		rn.commitedIndex = ar.leaderCommittedIndex
+		rn.print(fmt.Sprintf("follower shift commitedIndex to %d", rn.commitedIndex))
+	}
+
 	rn.sendAEResponse(ar.id, msg.srcid, true)
 	return
 }
@@ -122,6 +124,6 @@ func (rn *RaftNode) sendAEResponse(ae_id int, leaderId int, success bool) {
 	}
 
 	rn.print(fmt.Sprintf("follower send ae response cmdLod=%d\n", len(rn.CmdLog)))
-	m := msg(rn.Id, leaderId, AppendEntriesResponse{ae_id: ae_id, success: success, lastIndex: len(rn.CmdLog) - 1})
+	m := msg(rn.id, leaderId, AppendEntriesResponse{ae_id: ae_id, success: success, lastIndex: len(rn.CmdLog) - 1})
 	rn.send(m)
 }

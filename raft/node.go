@@ -15,9 +15,9 @@ const (
 )
 
 type Node struct {
-	Id           int
-	IncomingChan chan interface{}
-	OutgoingChan chan interface{}
+	id           int
+	incomingChan chan interface{}
+	outgoingChan chan interface{}
 }
 
 const (
@@ -28,8 +28,10 @@ const (
 )
 
 type Entry struct {
-	term int64
-	cmd  string
+	term     int64
+	clientId int
+	msgId    int64
+	cmd      string
 }
 
 type FollowerInfo struct {
@@ -43,6 +45,11 @@ type FollowerInfo struct {
 type LeaderInfo struct {
 	id           int
 	leaderLastTS time.Time
+}
+
+type Timeout struct {
+	electionTimeoutMS int
+	followerTimeoutMS int
 }
 
 type RaftNode struct {
@@ -65,8 +72,7 @@ type RaftNode struct {
 	commitInfo    *CommitInfo
 	commitedIndex int
 
-	electionTimeoutMS int
-	followerTimeoutMS int
+	Timeout
 
 	pingNum int
 	ae_id   int
@@ -81,7 +87,7 @@ func NewNode(id int, r rnd, incomingChan chan interface{}, outgoingChan chan int
 	f.Close()
 
 	return &RaftNode{
-		Node:          Node{Id: id, IncomingChan: incomingChan, OutgoingChan: outgoingChan},
+		Node:          Node{id: id, incomingChan: incomingChan, outgoingChan: outgoingChan},
 		CurrentTerm:   1,
 		State:         Follower,
 		Status:        Active,
@@ -89,9 +95,8 @@ func NewNode(id int, r rnd, incomingChan chan interface{}, outgoingChan chan int
 		commitedIndex: -1,
 		CmdLog:        make([]Entry, 0),
 		followers:     make(map[int]*FollowerInfo),
-
-		electionTimeoutMS: r.RandomTimeoutMs(CandidateElectionTimeout),
-		followerTimeoutMS: r.RandomTimeoutMs(FollowerLeaderIdleBaseTimeout),
+		Timeout: Timeout{electionTimeoutMS: r.RandomTimeoutMs(CandidateElectionTimeout),
+			followerTimeoutMS: r.RandomTimeoutMs(FollowerLeaderIdleBaseTimeout)},
 	}
 }
 
@@ -111,7 +116,7 @@ func (rn *RaftNode) nextEvent() interface{} {
 		time.Sleep(time.Duration(500) * time.Millisecond)
 	}
 
-	ev := <-rn.IncomingChan
+	ev := <-rn.incomingChan
 
 	types := reflect.TypeOf(ev)
 	if types.String() != "raft.SystemEvent" {
@@ -143,18 +148,18 @@ func (rn *RaftNode) run() {
 			break
 
 		}
-		//rn.print(fmt.Sprintf("finish process event %s\n", reflect.TypeOf(ev)))
+
 	}
 }
 
 func (rn *RaftNode) grantVote(newLeaderId int, newTerm int64) {
-	rs := fmt.Sprintf("node %d vote for %d\n", rn.Id, newLeaderId)
+	rs := fmt.Sprintf("node %d vote for %d\n", rn.id, newLeaderId)
 	rn.print(rs)
 
 	rn.VotedFor = newLeaderId
 	rn.CurrentTerm = newTerm
-	//ev := MsgEvent{srcid: rn.Id, dstid: newLeaderId, body: VoteResponse{success: true, term: newTerm}}
-	ev := msg(rn.Id, newLeaderId, VoteResponse{success: true, term: newTerm})
+	//ev := MsgEvent{srcid: rn.id, dstid: newLeaderId, body: VoteResponse{success: true, term: newTerm}}
+	ev := msg(rn.id, newLeaderId, *NewVoteResponse(newTerm, len(rn.CmdLog)-1, true))
 	rn.send(ev)
 }
 
@@ -177,7 +182,7 @@ func (rn *RaftNode) switchToState(newState string) error {
 }
 
 func (rn *RaftNode) AppendCommand(cmd string) {
-	rn.IncomingChan <- ClientEvent{clientId: "client", body: ClientCommand{cmd: cmd}}
+	rn.incomingChan <- ClientEvent{clientId: "client", body: ClientCommand{cmd: cmd}}
 }
 
 func (rn *RaftNode) switchToFollower() {

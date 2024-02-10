@@ -47,7 +47,7 @@ func getLogName(id int) string {
 }
 
 func (rn *RaftNode) print(s string) {
-	fmt.Printf("node %d term=%d state = %s %s \n", rn.Id, rn.CurrentTerm, rn.State, s)
+	//fmt.Printf("node %d term=%d state = %s %s \n", rn.id, rn.CurrentTerm, rn.State, s)
 }
 
 func initTrace() {

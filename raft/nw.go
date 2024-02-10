@@ -17,7 +17,7 @@ type Router struct {
 
 func (rn *RaftNode) send(msg interface{}) error {
 
-	ch := rn.Node.OutgoingChan
+	ch := rn.Node.outgoingChan
 	ch <- msg
 	return nil
 }
@@ -39,7 +39,7 @@ func (d *Delay) run() {
 		msg := x.(MsgEvent)
 
 		current := time.Now()
-		targetTs := msg.ts.Add(time.Duration(d.delay) * time.Millisecond)
+		targetTs := msg.ts.Add(time.Duration(d.delay) * time.Microsecond)
 		sleepDuration := targetTs.Sub(current)
 		if sleepDuration > 0 {
 			time.Sleep(sleepDuration)
