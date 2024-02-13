@@ -1,33 +1,34 @@
 package raft
 
 import (
+	"fmt"
 	"time"
 )
 
 type Delay struct {
 	delay         int64 // delay in microseconds
-	inputChannel  chan interface{}
-	outputChannel chan interface{}
+	inputChannel  chan MsgEvent
+	outputChannel chan MsgEvent
 }
 
 type Router struct {
-	incomingChannel chan interface{}
-	routes          map[int]*chan interface{}
+	incomingChannel chan MsgEvent
+	routes          map[int]*chan MsgEvent
 }
 
-func (rn *RaftNode) send(msg interface{}) error {
+func (rn *RaftNode) send(msg *MsgEvent) error {
 
 	ch := rn.Node.outgoingChan
-	ch <- msg
+	ch <- *msg
 	return nil
 }
 
-func CreateDelay(delay int64, incoming chan interface{}, outgoing chan interface{}) *Delay {
+func CreateDelay(delay int64, incoming chan MsgEvent, outgoing chan MsgEvent) *Delay {
 	if incoming == nil {
-		incoming = make(chan interface{}, CHANNELSIZE)
+		incoming = make(chan MsgEvent, CHANNELSIZE)
 	}
 	if outgoing == nil {
-		outgoing = make(chan interface{}, CHANNELSIZE)
+		outgoing = make(chan MsgEvent, CHANNELSIZE)
 	}
 
 	return &Delay{delay: delay, inputChannel: incoming, outputChannel: outgoing}
@@ -36,7 +37,7 @@ func CreateDelay(delay int64, incoming chan interface{}, outgoing chan interface
 func (d *Delay) run() {
 	for {
 		x := <-d.inputChannel
-		msg := x.(MsgEvent)
+		msg := x
 
 		current := time.Now()
 		targetTs := msg.ts.Add(time.Duration(d.delay) * time.Microsecond)
@@ -49,15 +50,15 @@ func (d *Delay) run() {
 	}
 }
 
-func CreateRouter(incomingChan chan interface{}) *Router {
+func CreateRouter(incomingChan chan MsgEvent) *Router {
 	if incomingChan == nil {
-		incomingChan = make(chan interface{}, 1000000)
+		incomingChan = make(chan MsgEvent, 1000000)
 	}
 
-	return &Router{incomingChannel: incomingChan, routes: make(map[int]*chan interface{})}
+	return &Router{incomingChannel: incomingChan, routes: make(map[int]*chan MsgEvent)}
 }
 
-func (r *Router) AddRoute(id int, channel chan interface{}) {
+func (r *Router) AddRoute(id int, channel chan MsgEvent) {
 	r.routes[id] = &channel
 }
 
@@ -65,14 +66,19 @@ func (r *Router) run() {
 	initTrace()
 	for {
 		x := <-r.incomingChannel
-		msg := x.(MsgEvent)
+		msg := x
 		trace(msg)
-		channel := *r.routes[msg.dstid]
+		ch := r.routes[msg.dstid]
 
-		channel <- x
+		if ch != nil {
+			channel := *ch
+			channel <- x
+		} else {
+			fmt.Printf("channel not found for %d", msg.dstid)
+		}
 	}
 }
 
-func msg(srcId int, dstId int, body interface{}) MsgEvent {
-	return MsgEvent{srcid: srcId, dstid: dstId, body: body, ts: time.Now()}
+func msg(srcId int, dstId int, body interface{}) *MsgEvent {
+	return &MsgEvent{srcid: srcId, dstid: dstId, body: body, ts: time.Now()}
 }

@@ -17,12 +17,6 @@ type MsgEvent struct {
 	body interface{}
 }
 
-type ClientEvent struct {
-	clientId string
-
-	body interface{}
-}
-
 // System events
 
 type TimerTick struct {
@@ -85,17 +79,32 @@ type ClientCommand struct {
 	cmd string
 }
 
+func (v ClientCommand) String() string {
+	return fmt.Sprintf("cmd(id: %d, cmd:%s )", v.id, v.cmd)
+}
+
 func NewClientCommand(cmd string) *ClientCommand {
 	return &ClientCommand{cmd: cmd}
 }
 
-type ClientCommendResponse struct {
+type ClientCommandResponse struct {
 	cmdId   int64
 	success bool
 
 	leaderid int
 }
 
-func NewClientCommendResponse(success bool) *ClientCommendResponse {
-	return &ClientCommendResponse{success: success}
+func (v ClientCommandResponse) String() string {
+	return fmt.Sprintf("cmd_resp(id: %d, success:%v leaderid:%d )", v.cmdId, v.success, v.leaderid)
+}
+
+func NewClientCommendResponse(success bool) *ClientCommandResponse {
+	return &ClientCommandResponse{success: success}
+}
+
+type LeaderDiscoveryRequest struct {
+}
+
+type LeaderDiscoveryResponse struct {
+	leaderId int
 }

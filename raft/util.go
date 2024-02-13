@@ -47,7 +47,19 @@ func getLogName(id int) string {
 }
 
 func (rn *RaftNode) print(s string) {
-	//fmt.Printf("node %d term=%d state = %s %s \n", rn.id, rn.CurrentTerm, rn.State, s)
+	fname := fmt.Sprintf("./log_%d.txt", rn.id)
+
+	f, err := os.OpenFile(fname, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	str := fmt.Sprintf("%v: node %d term=%d state = %s %s \n", time.Now(), rn.id, rn.CurrentTerm, rn.State, s)
+	_, err = f.WriteString(str)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func initTrace() {

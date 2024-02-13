@@ -64,7 +64,7 @@ func (rn *RaftNode) switchToLeader() {
 func (rn *RaftNode) ackCommands(from int, to int) {
 	for idx := from; idx <= to; idx++ {
 		cmd := rn.CmdLog[idx]
-		msg := msg(rn.id, cmd.clientId, ClientCommendResponse{cmdId: cmd.msgId, success: true})
+		msg := msg(rn.id, cmd.clientId, ClientCommandResponse{cmdId: cmd.msgId, success: true})
 		rn.send(msg)
 	}
 
@@ -78,7 +78,7 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 		rn.print(fmt.Sprintf("fv.id = %d fv.next=%d leader.CmdLog=%d leader.commited= %d", fv.id, fv.nextIndex, len(rn.CmdLog), rn.commitedIndex))
 		rn.print(fmt.Sprintf("remote.id = %d remote.CmdLog=%d remote.committed=%d", remote.id, len(remote.CmdLog), remote.commitedIndex))
 
-		if delay && !IsTimeout(fv.lastRequest, time.Now(), 100) {
+		if delay && !IsTimeout(fv.lastRequest, time.Now(), 10) {
 			continue
 		}
 
@@ -151,7 +151,13 @@ func (rn *RaftNode) leaderProcessMsgEvent(ev *MsgEvent) {
 	}
 
 	if cmd, ok := ev.body.(ClientCommand); ok {
+		rn.print(fmt.Sprintf("Leader recieved clientCommand %d", cmd.cmd))
 		rn.appendLog(cmd.id, ev.srcid, cmd.cmd)
+		rn.syncFollowers(false)
+		return
+	}
+	if _, ok := ev.body.(LeaderDiscoveryRequest); ok {
+		rn.send(msg(rn.id, ev.srcid, LeaderDiscoveryResponse{leaderId: rn.id}))
 		return
 	}
 

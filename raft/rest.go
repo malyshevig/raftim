@@ -11,6 +11,7 @@ import (
 )
 
 type RestServer struct {
+	clientNode *ClientNode
 }
 
 type RestNode struct {
@@ -53,7 +54,7 @@ func (server *RestServer) GetNodes() []RestNode {
 		rn := n.Value.(*RaftNode)
 		restNodes = append(restNodes, RestNode{ID: rn.id, TERM: rn.CurrentTerm, STATE: rn.State,
 			LEADER: rn.VotedFor, STATUS: rn.Status, COMITTED_INDEX: rn.commitedIndex, LOG_LEN: len(rn.CmdLog)})
-		fmt.Printf("%v", rn)
+
 	}
 	sort.Slice(restNodes, func(i, j int) bool {
 		return restNodes[i].ID < restNodes[j].ID
@@ -146,14 +147,8 @@ func (m *RestServer) Command(c *gin.Context) {
 	cmd := c.Query("cmd")
 	fmt.Printf("Client comand %s\n", cmd)
 
-	node := GetLeader()
-	if node == nil {
-		r := fmt.Sprintf("No leader found")
-		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": r})
-		return
-	}
+	m.clientNode.processRequest(cmd)
 
-	node.AppendCommand(cmd)
 	c.JSON(http.StatusOK, m.GetNodes())
 	return
 }

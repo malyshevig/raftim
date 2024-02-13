@@ -17,11 +17,6 @@ func (rn *RaftNode) followerProcessEvent(ev any) {
 		return
 	}
 
-	if cm, ok := ev.(ClientEvent); ok {
-		rn.followerClientEvent(&cm)
-		return
-	}
-
 	fmt.Printf("unexpected Event type %s", reflect.TypeOf(ev))
 	return
 }
@@ -29,6 +24,7 @@ func (rn *RaftNode) followerProcessEvent(ev any) {
 func (rn *RaftNode) followerProcessSystemEvent(ev *SystemEvent) {
 	if _, ok := ev.body.(TimerTick); ok { // Idle Timeout
 		if IsTimeout(rn.followerLeaderIdleTs, time.Now(), rn.followerTimeoutMS) {
+			rn.print("switch to candidate")
 			rn.switchToCandidate()
 			return
 		}
@@ -48,10 +44,13 @@ func (rn *RaftNode) followerProcessMsgEvent(message *MsgEvent) {
 	}
 
 	if cmd, ok := message.body.(ClientCommand); ok {
-		rn.send(msg(rn.id, message.srcid, &ClientCommendResponse{cmdId: cmd.id, success: false, leaderid: rn.leader.id}))
+		rn.send(msg(rn.id, message.srcid, ClientCommandResponse{cmdId: cmd.id, success: false, leaderid: rn.leader.id}))
 		return
 	}
-
+	if _, ok := message.body.(LeaderDiscoveryRequest); ok {
+		rn.send(msg(rn.id, message.srcid, LeaderDiscoveryResponse{leaderId: rn.leader.id}))
+		return
+	}
 	fmt.Printf("unexpected Msg %s\n", reflect.TypeOf(message.body))
 
 }
@@ -88,7 +87,6 @@ func (rn *RaftNode) followerProcessAE(msg *MsgEvent, ar AppendEntries) {
 
 func (rn *RaftNode) followerProcessVoteRequest(msg *MsgEvent, vr VoteRequest) {
 	if rn.CurrentTerm < vr.term {
-		rn.followerLeaderIdleTs = time.Now()
 		rn.CurrentTerm = vr.term
 		rn.switchToFollower()
 		rn.VotedFor = 0
@@ -96,6 +94,7 @@ func (rn *RaftNode) followerProcessVoteRequest(msg *MsgEvent, vr VoteRequest) {
 		if rn.commitedIndex <= vr.committedIndex {
 			rn.grantVote(msg.srcid, rn.CurrentTerm)
 			rn.VotedFor = msg.srcid
+			rn.followerLeaderIdleTs = time.Now()
 		}
 
 	} else {
@@ -110,10 +109,6 @@ func (rn *RaftNode) followerProcessVoteRequest(msg *MsgEvent, vr VoteRequest) {
 	}
 
 	return
-}
-
-func (rn *RaftNode) followerClientEvent(cm *ClientEvent) {
-	fmt.Printf("Follower recieved client event")
 }
 
 func (rn *RaftNode) sendAEResponse(ae_id int, leaderId int, success bool) {

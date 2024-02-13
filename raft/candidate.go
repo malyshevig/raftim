@@ -14,12 +14,7 @@ func (rn *RaftNode) candidateProcessEvent(ev any) {
 	}
 
 	if msg, ok := ev.(MsgEvent); ok {
-		rn.candidateMsgEvent(&msg)
-		return
-	}
-
-	if cm, ok := ev.(ClientEvent); ok {
-		rn.candidateClientEvent(&cm)
+		rn.candidateProcessMsgEvent(&msg)
 		return
 	}
 
@@ -62,7 +57,7 @@ func (rn *RaftNode) candidateProcessSystemEvent(se *SystemEvent) {
 	}
 }
 
-func (rn *RaftNode) candidateMsgEvent(message *MsgEvent) {
+func (rn *RaftNode) candidateProcessMsgEvent(message *MsgEvent) {
 	if vr, ok := message.body.(VoteResponse); ok {
 		vf := rn.getFollower(message.srcid)
 		rn.print(fmt.Sprintf("vote response src=%d term=%d \n", message.srcid, vr.term))
@@ -102,12 +97,12 @@ func (rn *RaftNode) candidateMsgEvent(message *MsgEvent) {
 	}
 
 	if cmd, ok := message.body.(ClientCommand); ok {
-		rn.send(msg(rn.id, message.srcid, &ClientCommendResponse{cmdId: cmd.id, success: false, leaderid: rn.leader.id}))
+		rn.send(msg(rn.id, message.srcid, ClientCommandResponse{cmdId: cmd.id, success: false, leaderid: rn.leader.id}))
+		return
+	}
+	if _, ok := message.body.(LeaderDiscoveryRequest); ok {
+		//rn.send(msg(rn.id, message.srcid, LeaderDiscoveryResponse{leaderId: 0}))
 		return
 	}
 
-}
-
-func (rn *RaftNode) candidateClientEvent(cm *ClientEvent) {
-	fmt.Printf("Candate recieved client event")
 }

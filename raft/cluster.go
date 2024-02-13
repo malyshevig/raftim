@@ -6,13 +6,6 @@ type Cluster struct {
 	Nodes map[int]*RaftNode
 }
 
-func (nw *Cluster) sendAllSysEvent(msg SystemEvent) error {
-	for _, rn := range nw.Nodes {
-		rn.Node.incomingChan <- msg
-	}
-	return nil
-}
-
 func (nw *Cluster) NodesCount() int {
 	return len(nw.Nodes)
 }
@@ -27,6 +20,20 @@ func (nw *Cluster) GetNodes() *list.List {
 		nodes.PushBack(n)
 	}
 	return nodes
+}
+
+func (nw *Cluster) getLeaderId() int {
+	var r *RaftNode = nil
+	for _, n := range nw.Nodes {
+		if n.State == "leader" {
+			r = n
+		}
+	}
+	if r != nil {
+		return r.id
+	} else {
+		return 0
+	}
 }
 
 func (cl *Cluster) getNode(id int) *RaftNode {
