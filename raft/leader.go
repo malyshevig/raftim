@@ -2,37 +2,31 @@ package raft
 
 import (
 	"fmt"
+	"raft/nw"
+	"raft/raftApi"
 	"reflect"
 	"time"
 )
 
 func (rn *RaftNode) leaderProcessEvent(ev interface{}) {
-	// process VoteRequest
-
-	if se, ok := ev.(SystemEvent); ok {
+	if se, ok := ev.(raftApi.SystemEvent); ok {
 		rn.leaderProcessSystemEvent(&se)
 		return
 	}
 
-	if msg, ok := ev.(MsgEvent); ok {
+	if msg, ok := ev.(raftApi.MsgEvent); ok {
 		rn.leaderProcessMsgEvent(&msg)
 		return
 	}
-
-	//if cm, ok := ev.(ClientEvent); ok {
-	//	rn.leaderClientEvent(&cm)
-	//	return
-	//}
 
 	rs := fmt.Sprintf("unexpected Event type %s", reflect.TypeOf(ev))
 	rn.print(rs)
 	return
 }
 
-func (rn *RaftNode) leaderProcessSystemEvent(ev *SystemEvent) {
-	if _, ok := ev.body.(TimerTick); ok { // Idle Timeout
-		if IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
-			rn.print("Ping ALl")
+func (rn *RaftNode) leaderProcessSystemEvent(ev *raftApi.SystemEvent) {
+	if _, ok := ev.Body.(raftApi.TimerTick); ok { // Idle Timeout
+		if nw.IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
 			rn.leaderPingTs = time.Now()
 			rn.sendPingToAll()
 		}
@@ -40,6 +34,7 @@ func (rn *RaftNode) leaderProcessSystemEvent(ev *SystemEvent) {
 }
 
 func (rn *RaftNode) sendPingToAll() {
+	rn.logger.Infow("ping followers", "Node")
 	rn.syncFollowers(true)
 }
 
@@ -53,9 +48,9 @@ func (rn *RaftNode) switchToLeader() {
 		rn.commitInfo.addFollower(v)
 	}
 	newCommittedIndex := rn.commitInfo.GetNewCommitIndex()
-	if newCommittedIndex > rn.commitedIndex {
-		rn.saveLog(rn.commitedIndex+1, newCommittedIndex)
-		rn.commitedIndex = newCommittedIndex
+	if newCommittedIndex > rn.CommitedIndex {
+		rn.saveLog(rn.CommitedIndex+1, newCommittedIndex)
+		rn.CommitedIndex = newCommittedIndex
 	}
 
 	rn.syncFollowers(false)
@@ -64,8 +59,8 @@ func (rn *RaftNode) switchToLeader() {
 func (rn *RaftNode) ackCommands(from int, to int) {
 	for idx := from; idx <= to; idx++ {
 		cmd := rn.CmdLog[idx]
-		msg := msg(rn.id, cmd.clientId, ClientCommandResponse{cmdId: cmd.msgId, success: true})
-		rn.send(msg)
+		msg := nw.Msg(rn.Id, cmd.ClientId, raftApi.ClientCommandResponse{CmdId: cmd.MsgId, Success: true})
+		rn.Send(msg)
 	}
 
 }
@@ -73,16 +68,12 @@ func (rn *RaftNode) ackCommands(from int, to int) {
 func (rn *RaftNode) syncFollowers(delay bool) {
 	rn.print("Sync followers")
 	for _, fv := range rn.followers {
-		remote := ClusterInstance().getNode(fv.id)
 
-		rn.print(fmt.Sprintf("fv.id = %d fv.next=%d leader.CmdLog=%d leader.commited= %d", fv.id, fv.nextIndex, len(rn.CmdLog), rn.commitedIndex))
-		rn.print(fmt.Sprintf("remote.id = %d remote.CmdLog=%d remote.committed=%d", remote.id, len(remote.CmdLog), remote.commitedIndex))
-
-		if delay && !IsTimeout(fv.lastRequest, time.Now(), 10) {
+		if delay && !nw.IsTimeout(fv.lastRequest, time.Now(), 10) {
 			continue
 		}
 
-		entriesToSend := []Entry{}
+		entriesToSend := []raftApi.Entry{}
 		if fv.nextIndex < len(rn.CmdLog) {
 			entriesToSend = rn.CmdLog[fv.nextIndex:]
 		}
@@ -95,17 +86,17 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 				rn.print(fmt.Sprintf("prevIndex %d > rn.CmdLog() %d ", prevIndex, len(rn.CmdLog)))
 			}
 
-			prevTerm = rn.CmdLog[prevIndex].term
+			prevTerm = rn.CmdLog[prevIndex].Term
 		} else {
 			prevTerm = 0
 		}
 
-		//rs := fmt.Sprintf("sync %d num_entries= %d  index = %d  %v\n", fv.id, len(entriesToSend), fv.nextIndex)
+		//rs := fmt.Sprintf("sync %d num_entries= %d  index = %d  %v\n", fv.Id, len(entriesToSend), fv.nextIndex)
 		//rn.print(rs)
-		event := msg(rn.id, fv.id, AppendEntries{id: rn.ae_id, entries: entriesToSend, lastLogIndex: fv.nextIndex - 1, term: rn.CurrentTerm,
-			lastLogTerm: prevTerm, leaderCommittedIndex: rn.commitedIndex})
+		event := nw.Msg(rn.Id, fv.id, raftApi.AppendEntries{Id: rn.ae_id, Entries: entriesToSend, LastLogIndex: fv.nextIndex - 1, Term: rn.CurrentTerm,
+			LastLogTerm: prevTerm, LeaderCommittedIndex: rn.CommitedIndex})
 		rn.ae_id++
-		rn.send(event)
+		rn.Send(event)
 
 		fv.lastRequest = time.Now()
 
@@ -125,66 +116,75 @@ func (rn *RaftNode) leaderCalculateNewCommitIndex() int {
 	return commit
 }
 
-func (rn *RaftNode) leaderProcessMsgEvent(ev *MsgEvent) {
+func (rn *RaftNode) leaderProcessMsgEvent(msg *raftApi.MsgEvent) {
 
-	if vr, ok := ev.body.(VoteRequest); ok {
-		if rn.CurrentTerm < vr.term {
-			rn.CurrentTerm = vr.term
-			rn.switchToFollower()
+	if vr, ok := msg.Body.(raftApi.VoteRequest); ok {
+		if rn.CurrentTerm < vr.Term {
+			rn.CurrentTerm = vr.Term
+			rn.switchToFollower(0)
 			rn.VotedFor = 0
 
-			if rn.commitedIndex <= vr.committedIndex {
-				rn.grantVote(ev.srcid, vr.term)
-				rn.VotedFor = ev.srcid
+			if rn.CommitedIndex <= vr.CommittedIndex {
+				rn.grantVote(msg.Srcid, vr.Term)
+				rn.VotedFor = msg.Srcid
 			}
 		}
 		return
 	}
 
-	if ae, ok := ev.body.(AppendEntriesResponse); ok {
-		rn.leaderProcessAEResponse(ev, ae)
+	if ae, ok := msg.Body.(raftApi.AppendEntriesResponse); ok {
+		rn.leaderProcessAEResponse(msg, ae)
 		return
 	}
 
-	if _, ok := ev.body.(VoteResponse); ok {
+	if _, ok := msg.Body.(raftApi.VoteResponse); ok {
 		return
 	}
 
-	if cmd, ok := ev.body.(ClientCommand); ok {
-		rn.print(fmt.Sprintf("Leader recieved clientCommand %d", cmd.cmd))
-		rn.appendLog(cmd.id, ev.srcid, cmd.cmd)
+	if cmd, ok := msg.Body.(raftApi.ClientCommand); ok {
+		rn.print(fmt.Sprintf("Leader recieved clientCommand %d", cmd.Cmd))
+		rn.appendLog(cmd.Id, msg.Srcid, cmd.Cmd)
 		rn.syncFollowers(false)
 		return
 	}
-	if _, ok := ev.body.(LeaderDiscoveryRequest); ok {
-		rn.send(msg(rn.id, ev.srcid, LeaderDiscoveryResponse{leaderId: rn.id}))
+	if _, ok := msg.Body.(raftApi.LeaderDiscoveryRequest); ok {
+		rn.Send(nw.Msg(rn.Id, msg.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.Id}))
 		return
 	}
 
-	fmt.Printf("Unexpected msg type recieved %s\n", reflect.TypeOf(ev.body))
+	if ae, ok := msg.Body.(raftApi.AppendEntries); ok {
+		if rn.CurrentTerm < ae.Term {
+			rn.print(fmt.Sprintf("Leader recieved Append from the node %d with term = %d, switch to Follower", msg.Srcid, ae.Term))
+			rn.CurrentTerm = ae.Term
+			rn.switchToFollower(msg.Srcid)
+		}
+		return
+	}
+
+	fmt.Printf("Unexpected Msg type recieved %s\n", reflect.TypeOf(msg.Body))
 }
 
-func (rn *RaftNode) leaderProcessAEResponse(ev *MsgEvent, ae AppendEntriesResponse) bool {
-	if !ae.success {
+func (rn *RaftNode) leaderProcessAEResponse(ev *raftApi.MsgEvent, ae raftApi.AppendEntriesResponse) bool {
+	if !ae.Success {
 		return true
 	}
-	vf := rn.getFollower(ev.srcid)
+	vf := rn.getFollower(ev.Srcid)
 
 	if vf != nil {
 
-		vf.nextIndex = ae.lastIndex + 1
+		vf.nextIndex = ae.LastIndex + 1
 		vf.lastResponse = time.Now()
 
-		//			rs := fmt.Sprintf("response vf = %d vf.NextIndex=%d", vf.id, vf.nextIndex)
+		//			rs := fmt.Sprintf("response vf = %d vf.NextIndex=%d", vf.Id, vf.nextIndex)
 		//			rn.print(rs)
 		rn.commitInfo.updateFollowerIndex(vf)
 		committedIndex := rn.commitInfo.GetNewCommitIndex()
 
-		if committedIndex > rn.commitedIndex {
-			rn.saveLog(rn.commitedIndex+1, committedIndex)
-			rn.ackCommands(rn.commitedIndex+1, committedIndex)
-			rn.commitedIndex = committedIndex
-			rn.print(fmt.Sprintf("Leader shift commitedIndex to %d", rn.commitedIndex))
+		if committedIndex > rn.CommitedIndex {
+			rn.saveLog(rn.CommitedIndex+1, committedIndex)
+			rn.ackCommands(rn.CommitedIndex+1, committedIndex)
+			rn.CommitedIndex = committedIndex
+			rn.print(fmt.Sprintf("Leader shift CommitedIndex to %d", rn.CommitedIndex))
 			rn.syncFollowers(true)
 		}
 	} else {
@@ -194,25 +194,15 @@ func (rn *RaftNode) leaderProcessAEResponse(ev *MsgEvent, ae AppendEntriesRespon
 }
 
 func (rn *RaftNode) appendLog(msgId int64, clientId int, cmd string) {
-	rn.CmdLog = append(rn.CmdLog, Entry{term: rn.CurrentTerm, cmd: cmd, clientId: clientId, msgId: msgId})
-	//logWriteStr(rn.id, cmd)
+	rn.CmdLog = append(rn.CmdLog, raftApi.Entry{Term: rn.CurrentTerm, Cmd: cmd, ClientId: clientId, MsgId: msgId})
+	//logWriteStr(rn.Id, cmd)
 }
-
-//func (rn *RaftNode) leaderClientEvent(ev *ClientEvent) {
-//	if vr, ok := ev.body.(ClientCommand); ok {
-//		rn.appendLog(vr.cmd)
-//		rn.syncFollowers(true)
-//
-//		return
-//	}
-//}
 
 func (rn *RaftNode) makeFollowers() map[int]*FollowerInfo {
 	followers := make(map[int]*FollowerInfo, 0)
-	for n := ClusterInstance().GetNodes().Front(); n != nil; n = n.Next() {
-		raftNode := n.Value.(*RaftNode)
-		if raftNode.id != rn.id {
-			followers[raftNode.id] = &FollowerInfo{raftNode.id, time.Now(), time.Now(), 0}
+	for _, nodeId := range rn.config.Nodes {
+		if nodeId != rn.Id {
+			followers[nodeId] = &FollowerInfo{nodeId, time.Now(), time.Now(), 0}
 		}
 	}
 	return followers

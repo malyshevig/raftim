@@ -2,22 +2,29 @@ package raft
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"log"
 	"os"
+	"raft/nw"
+	"raft/raftApi"
 	"time"
 )
 
 const (
 	FollowerLeaderIdleBaseTimeout = 1000
-	CandidateElectionTimeout      = FollowerLeaderIdleBaseTimeout / 2
-	LeaderPingInterval            = FollowerLeaderIdleBaseTimeout / 2
+	CandidateElectionTimeout      = FollowerLeaderIdleBaseTimeout
+	LeaderPingInterval            = FollowerLeaderIdleBaseTimeout / 4
 )
 
 type Node struct {
-	id           int
-	incomingChan chan MsgEvent
-	outgoingChan chan MsgEvent
-	controlChan  chan SystemEvent
+	Id           int
+	IncomingChan chan raftApi.MsgEvent
+	OutgoingChan chan raftApi.MsgEvent
+	ControlChan  chan raftApi.SystemEvent
+}
+
+type ClusterConfig struct {
+	Nodes []int
 }
 
 const (
@@ -26,13 +33,6 @@ const (
 	Follower  = "follower"
 	Active    = "active"
 )
-
-type Entry struct {
-	term     int64
-	clientId int
-	msgId    int64
-	cmd      string
-}
 
 type FollowerInfo struct {
 	id           int
@@ -48,12 +48,17 @@ type LeaderInfo struct {
 }
 
 type Timeout struct {
-	electionTimeoutMS int
-	followerTimeoutMS int
+	ElectionTimeoutMS int
+	FollowerTimeoutMS int
+}
+
+func (t Timeout) String() string {
+	return fmt.Sprintf("ElectionTimeoutMS = %d FollowerTimeoutMS = %d", t.ElectionTimeoutMS, t.FollowerTimeoutMS)
 }
 
 type RaftNode struct {
 	Node
+	config ClusterConfig
 
 	CurrentTerm          int64
 	State                string
@@ -68,17 +73,22 @@ type RaftNode struct {
 	leader               LeaderInfo
 
 	Status        string
-	CmdLog        []Entry
+	CmdLog        []raftApi.Entry
 	commitInfo    *CommitInfo
-	commitedIndex int
+	CommitedIndex int
 
 	Timeout
 
 	pingNum int
 	ae_id   int
+
+	logger *zap.SugaredLogger
 }
 
-func NewNode(id int, r rnd, incomingChan chan MsgEvent, outgoingChan chan MsgEvent) *RaftNode {
+func NewNode(id int, timeouts Timeout, config ClusterConfig,
+	incomingChan chan raftApi.MsgEvent,
+	outgoingChan chan raftApi.MsgEvent, logger *zap.Logger) *RaftNode {
+
 	fname := getLogName(id)
 	f, err := os.Create(fname)
 	if err != nil {
@@ -86,20 +96,23 @@ func NewNode(id int, r rnd, incomingChan chan MsgEvent, outgoingChan chan MsgEve
 	}
 	f.Close()
 
-	controlChan := make(chan SystemEvent, CHANNELSIZE)
+	controlChan := make(chan raftApi.SystemEvent, nw.CHANNELSIZE)
 
-	return &RaftNode{
-		Node:          Node{id: id, incomingChan: incomingChan, outgoingChan: outgoingChan, controlChan: controlChan},
+	rn := &RaftNode{
+		Node:          Node{Id: id, IncomingChan: incomingChan, OutgoingChan: outgoingChan, ControlChan: controlChan},
+		config:        config,
 		CurrentTerm:   1,
 		State:         Follower,
 		Status:        Active,
 		VotedFor:      id,
-		commitedIndex: -1,
-		CmdLog:        make([]Entry, 0),
+		CommitedIndex: -1,
+		CmdLog:        make([]raftApi.Entry, 0),
 		followers:     make(map[int]*FollowerInfo),
-		Timeout: Timeout{electionTimeoutMS: r.RandomTimeoutMs(CandidateElectionTimeout),
-			followerTimeoutMS: r.RandomTimeoutMs(FollowerLeaderIdleBaseTimeout)},
+		Timeout:       timeouts,
+		logger:        logger.Sugar(),
 	}
+	rn.logger.Infof("Created node id: %d timeouts: %v", rn.Id, rn.Timeout)
+	return rn
 }
 
 func (rn *RaftNode) init() {
@@ -108,11 +121,18 @@ func (rn *RaftNode) init() {
 	rn.leaderPingTs = time.Now()
 	rn.candidateElectionTs = time.Now()
 
-	rn.switchToFollower()
+	rn.switchToFollower(0)
 }
 
-func (rn *RaftNode) run() {
-	defer rn.print("run exit")
+func (rn *RaftNode) Send(msg *raftApi.MsgEvent) error {
+
+	ch := rn.Node.OutgoingChan
+	ch <- *msg
+	return nil
+}
+
+func (rn *RaftNode) Run() {
+	defer rn.logger.Info("node  run exit ", zap.Int("id", rn.Id))
 	rn.init()
 	for {
 
@@ -121,7 +141,7 @@ func (rn *RaftNode) run() {
 		}
 
 		select {
-		case controlEvent := <-rn.controlChan:
+		case controlEvent := <-rn.ControlChan:
 			switch rn.State {
 			case Leader:
 				rn.leaderProcessSystemEvent(&controlEvent)
@@ -134,7 +154,7 @@ func (rn *RaftNode) run() {
 				break
 			}
 
-		case msgEvent := <-rn.incomingChan:
+		case msgEvent := <-rn.IncomingChan:
 			switch rn.State {
 			case Leader:
 				rn.leaderProcessMsgEvent(&msgEvent)
@@ -152,23 +172,23 @@ func (rn *RaftNode) run() {
 }
 
 func (rn *RaftNode) grantVote(newLeaderId int, newTerm int64) {
-	rs := fmt.Sprintf("node %d vote for %d\n", rn.id, newLeaderId)
+	rs := fmt.Sprintf("node %d vote for %d\n", rn.Id, newLeaderId)
 	rn.print(rs)
 
 	rn.VotedFor = newLeaderId
 	rn.CurrentTerm = newTerm
-	//ev := MsgEvent{srcid: rn.id, dstid: newLeaderId, body: VoteResponse{success: true, term: newTerm}}
-	ev := msg(rn.id, newLeaderId, *NewVoteResponse(newTerm, len(rn.CmdLog)-1, true))
-	rn.send(ev)
+	//ev := MsgEvent{srcid: rn.Id, dstid: newLeaderId, Body: VoteResponse{Success: true, term: newTerm}}
+	ev := nw.Msg(rn.Id, newLeaderId, *raftApi.NewVoteResponse(newTerm, len(rn.CmdLog)-1, true))
+	rn.Send(ev)
 }
 
-func (rn *RaftNode) switchToState(newState string) error {
+func (rn *RaftNode) SwitchToState(newState string) error {
 	switch newState {
 	case Leader:
 		rn.switchToCandidate()
 		break
 	case Follower:
-		rn.switchToFollower()
+		rn.switchToFollower(0)
 		break
 	case Candidate:
 		rn.switchToCandidate()
@@ -180,8 +200,9 @@ func (rn *RaftNode) switchToState(newState string) error {
 	return nil
 }
 
-func (rn *RaftNode) switchToFollower() {
+func (rn *RaftNode) switchToFollower(leaderId int) {
 	rn.State = Follower
+	rn.leader = LeaderInfo{id: leaderId, leaderLastTS: time.Now()}
 }
 
 func (rn *RaftNode) getFollower(srcid int) *FollowerInfo {

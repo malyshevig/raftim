@@ -2,18 +2,20 @@ package raft
 
 import (
 	"fmt"
+	"raft/nw"
+	"raft/raftApi"
 	"reflect"
 	"time"
 )
 
 func (rn *RaftNode) candidateProcessEvent(ev any) {
 
-	if se, ok := ev.(SystemEvent); ok {
+	if se, ok := ev.(raftApi.SystemEvent); ok {
 		rn.candidateProcessSystemEvent(&se)
 		return
 	}
 
-	if msg, ok := ev.(MsgEvent); ok {
+	if msg, ok := ev.(raftApi.MsgEvent); ok {
 		rn.candidateProcessMsgEvent(&msg)
 		return
 	}
@@ -27,7 +29,7 @@ func (rn *RaftNode) switchToCandidate() {
 	rn.print("switch to candidate \n")
 	rn.CurrentTerm++
 	rn.State = Candidate
-	rn.VotedFor = rn.id
+	rn.VotedFor = rn.Id
 	rn.VoteCount = 1
 
 	rn.followers = rn.makeFollowers()
@@ -40,16 +42,16 @@ func (rn *RaftNode) switchToCandidate() {
 func (rn *RaftNode) sendVoteRequest(followers map[int]*FollowerInfo) {
 
 	for _, f := range followers {
-		m := msg(rn.id, f.id, VoteRequest{term: rn.CurrentTerm, committedIndex: rn.commitedIndex})
-		rn.send(m)
+		m := nw.Msg(rn.Id, f.id, raftApi.VoteRequest{Term: rn.CurrentTerm, CommittedIndex: rn.CommitedIndex})
+		rn.Send(m)
 	}
 
 }
 
-func (rn *RaftNode) candidateProcessSystemEvent(se *SystemEvent) {
-	//rn.print(fmt.Sprintf("candidate event %d %d\n", rn.candidateElectionTs, rn.electionTimeoutMS))
-	if _, ok := se.body.(TimerTick); ok { // Idle Timeout
-		if IsTimeout(rn.candidateElectionTs, time.Now(), rn.electionTimeoutMS) {
+func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
+	//rn.print(fmt.Sprintf("candidate event %d %d\n", rn.candidateElectionTs, rn.ElectionTimeoutMS))
+	if _, ok := se.Body.(raftApi.TimerTick); ok { // Idle Timeout
+		if nw.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
 			rn.print("reinit election")
 			rn.switchToCandidate()
 
@@ -57,14 +59,16 @@ func (rn *RaftNode) candidateProcessSystemEvent(se *SystemEvent) {
 	}
 }
 
-func (rn *RaftNode) candidateProcessMsgEvent(message *MsgEvent) {
-	if vr, ok := message.body.(VoteResponse); ok {
-		vf := rn.getFollower(message.srcid)
-		rn.print(fmt.Sprintf("vote response src=%d term=%d \n", message.srcid, vr.term))
+func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
+	rn.print(fmt.Sprintf("received msg = %v", message.Body))
+
+	if vr, ok := message.Body.(raftApi.VoteResponse); ok {
+		vf := rn.getFollower(message.Srcid)
+		rn.print(fmt.Sprintf("vote response src=%d term=%d \n", message.Srcid, vr.Term))
 
 		if vf != nil {
 			vf.lastResponse = time.Now()
-			vf.nextIndex = vr.lastLogIndex + 1
+			vf.nextIndex = vr.LastLogIndex + 1
 		}
 
 		rn.VoteCount++
@@ -76,32 +80,36 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *MsgEvent) {
 		return
 	}
 
-	if vr, ok := message.body.(VoteRequest); ok {
-		rn.print(fmt.Sprintf("vote request src=%d term=%d \n", message.srcid, vr.term))
-		if rn.CurrentTerm < vr.term {
-			rn.switchToFollower()
-			rn.CurrentTerm = vr.term
+	if vr, ok := message.Body.(raftApi.VoteRequest); ok {
+		rn.print(fmt.Sprintf("vote request src=%d term=%d \n", message.Srcid, vr.Term))
+		if rn.CurrentTerm < vr.Term {
+			rn.switchToFollower(message.Srcid)
+			rn.CurrentTerm = vr.Term
 
-			if rn.commitedIndex <= vr.committedIndex {
-				rn.grantVote(message.srcid, vr.term)
+			if rn.CommitedIndex <= vr.CommittedIndex {
+				rn.grantVote(message.Srcid, vr.Term)
 				rn.VotedFor = 0
+
 			}
 		}
 	}
 
-	if ar, ok := message.body.(AppendEntries); ok {
-		if rn.CurrentTerm <= ar.term {
-			rn.switchToFollower()
-			rn.followerProcessEvent(message)
-		}
-	}
+	if ar, ok := message.Body.(raftApi.AppendEntries); ok {
+		if rn.CurrentTerm <= ar.Term {
+			rn.CurrentTerm = ar.Term
 
-	if cmd, ok := message.body.(ClientCommand); ok {
-		rn.send(msg(rn.id, message.srcid, ClientCommandResponse{cmdId: cmd.id, success: false, leaderid: rn.leader.id}))
+			rn.switchToFollower(message.Srcid)
+			rn.followerProcessMsgEvent(message)
+		}
 		return
 	}
-	if _, ok := message.body.(LeaderDiscoveryRequest); ok {
-		//rn.send(msg(rn.id, message.srcid, LeaderDiscoveryResponse{leaderId: 0}))
+
+	if cmd, ok := message.Body.(raftApi.ClientCommand); ok {
+		rn.Send(nw.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
+		return
+	}
+	if _, ok := message.Body.(raftApi.LeaderDiscoveryRequest); ok {
+		//rn.Send(Msg(rn.Id, message.srcid, LeaderDiscoveryResponse{leaderId: 0}))
 		return
 	}
 

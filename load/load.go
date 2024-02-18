@@ -1,8 +1,10 @@
-package raft
+package load
 
 import (
 	"fmt"
 	"github.com/wmentor/latency"
+	"log"
+	"raft/client"
 	"time"
 )
 
@@ -12,11 +14,12 @@ func callWithMetrix(call func()) time.Duration {
 	return l.Duration()
 }
 
-func Load(node *ClientNode) {
+func Load(node *client.ClientNode) {
+	log.Printf("Load test start")
 	cmdNum := 1
-	for c := 0; c < 5000; {
+	for c := 0; c < 50000; {
 		lat := callWithMetrix(func() {
-			//node.processRequest(fmt.Sprintf("cmd#%d", cmdNum))
+			node.ProcessRequest(fmt.Sprintf("cmd#%d", cmdNum))
 		})
 
 		fmt.Printf("cmdNum = %d   latency = %d\n", c, lat.Milliseconds())
@@ -28,5 +31,5 @@ func Load(node *ClientNode) {
 
 		//	time.Sleep(time.Millisecond * 10)
 	}
-	print("exit loader")
+	log.Printf("exit Load test")
 }

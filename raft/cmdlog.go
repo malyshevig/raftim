@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"raft/raftApi"
 )
 
 func (rn *RaftNode) checkLog(index int, term int64) bool {
@@ -15,12 +16,12 @@ func (rn *RaftNode) checkLog(index int, term int64) bool {
 		return false
 	}
 
-	return rn.CmdLog[index].term == term
+	return rn.CmdLog[index].Term == term
 }
 
-func (rn *RaftNode) appendLogEntry(startIndex int, entry Entry) {
+func (rn *RaftNode) appendLogEntry(startIndex int, entry raftApi.Entry) {
 	if startIndex < len(rn.CmdLog) {
-		rn.print(fmt.Sprintf("recieved msg index %d already saved len(log)=%d", startIndex, len(rn.CmdLog)))
+		rn.print(fmt.Sprintf("recieved Msg index %d already saved len(log)=%d", startIndex, len(rn.CmdLog)))
 	} else {
 		rn.CmdLog = append(rn.CmdLog, entry)
 	}
@@ -33,7 +34,7 @@ func (rn *RaftNode) saveLog(indexFrom int, indexTo int) {
 		return
 	}
 
-	f, err := os.OpenFile(getLogName(rn.id), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(getLogName(rn.Id), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func (rn *RaftNode) saveLog(indexFrom int, indexTo int) {
 
 	if indexFrom <= indexTo {
 		for idx := indexFrom; idx <= indexTo; idx++ {
-			_, err = f.WriteString(rn.CmdLog[idx].cmd + "\n")
+			_, err = f.WriteString(rn.CmdLog[idx].Cmd + "\n")
 			if err != nil {
 				log.Fatal(err)
 			}

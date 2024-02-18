@@ -2,52 +2,62 @@ package raft
 
 import (
 	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"log"
-	"math/rand"
 	"os"
 	"time"
 )
 
-func ZeroTime() time.Time {
-	return time.Date(0, 0, 0, 0, 0, 0, 0, time.Local)
-
+func fileExists(filename string) bool {
+	f, err := os.Open(filename)
+	if err == nil {
+		f.Close()
+		return true
+	} else {
+		return false
+	}
 }
 
-func IsTimeout(ts time.Time, now time.Time, intervalMS int) bool {
-	targetTs := ts.Add(time.Duration(intervalMS) * time.Millisecond)
+func rotateLogFile(filename string) {
+	if !fileExists(filename) {
+		return
+	}
 
-	return now.After(targetTs)
-}
-
-func GetLeader() *RaftNode {
-	for n := ClusterInstance().GetNodes().Front(); n != nil; n = n.Next() {
-		if n.Value.(*RaftNode).State == Leader {
-			return n.Value.(*RaftNode)
+	for c := 0; ; c++ {
+		fname := fmt.Sprintf("%s_%d", filename, c)
+		if !fileExists(fname) {
+			os.Rename(filename, fname)
+			return
 		}
 	}
-	return nil
 }
 
-type rnd struct {
-	r *rand.Rand
-}
+func InitLogger(filename string) *zap.Logger {
+	rotateLogFile(filename)
 
-func initRand() rnd {
-	return rnd{r: rand.New(rand.NewSource(time.Now().UnixNano()))}
-}
+	cfg := zap.NewDevelopmentConfig()
+	cfg.EncoderConfig.LevelKey = "level"
+	cfg.EncoderConfig.NameKey = "name"
+	cfg.EncoderConfig.MessageKey = "msg"
+	cfg.EncoderConfig.CallerKey = "caller"
+	cfg.EncoderConfig.StacktraceKey = "stacktrace"
 
-func (rs *rnd) RandomTimeoutMs(baseMs int) int {
-	div := 4000
+	cfg.Encoding = "json"
+	cfg.EncoderConfig.TimeKey = "timestamp"
+	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	cfg.OutputPaths = []string{filename}
 
-	return baseMs + rs.r.Intn(div) - div/2
+	return zap.Must(cfg.Build())
 }
 
 func getLogName(id int) string {
 	return fmt.Sprintf("./nodeLog%d.txt", id)
 }
 
-func (rn *RaftNode) print(s string) {
-	fname := fmt.Sprintf("./log_%d.txt", rn.id)
+func (rn *RaftNode) print2(s string) {
+
+	fname := fmt.Sprintf("./log_%d.txt", rn.Id)
 
 	f, err := os.OpenFile(fname, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
@@ -55,29 +65,9 @@ func (rn *RaftNode) print(s string) {
 	}
 	defer f.Close()
 
-	str := fmt.Sprintf("%v: node %d term=%d state = %s %s \n", time.Now(), rn.id, rn.CurrentTerm, rn.State, s)
+	str := fmt.Sprintf("%v: node %d term=%d state = %s %s \n", time.Now(), rn.Id, rn.CurrentTerm, rn.State, s)
 	_, err = f.WriteString(str)
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func initTrace() {
-	f, err := os.OpenFile("./trace.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-}
-
-func trace(ev MsgEvent) {
-	f, err := os.OpenFile("./trace.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// remember to close the file
-	defer f.Close()
-
-	s := fmt.Sprintf("%v: %d->%d: %s\n", ev.ts, ev.srcid, ev.dstid, ev.body)
-	f.WriteString(s)
 }

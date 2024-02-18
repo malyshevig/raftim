@@ -1,4 +1,4 @@
-package raft
+package rest
 
 import (
 	"fmt"
@@ -6,16 +6,23 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"net/http"
+	"raft/client"
+	"raft/mgmt"
+	"raft/raft"
 	"sort"
 	"strconv"
 )
 
 type RestServer struct {
-	clientNode *ClientNode
+	clientNode *client.ClientNode
+}
+
+func NewRestServer(clientNode *client.ClientNode) *RestServer {
+	return &RestServer{clientNode: clientNode}
 }
 
 type RestNode struct {
-	ID             int    `json:"id"`
+	ID             int    `json:"Id"`
 	TERM           int64  `json:"term"`
 	STATE          string `json:"state"`
 	STATUS         string `json:"status"`
@@ -48,12 +55,12 @@ func (server *RestServer) Nodes(c *gin.Context) {
 }
 
 func (server *RestServer) GetNodes() []RestNode {
-	nodes := ClusterInstance().GetNodes()
+	nodes := mgmt.ClusterInstance().GetNodes()
 	var restNodes []RestNode
 	for n := nodes.Front(); n != nil; n = n.Next() {
-		rn := n.Value.(*RaftNode)
-		restNodes = append(restNodes, RestNode{ID: rn.id, TERM: rn.CurrentTerm, STATE: rn.State,
-			LEADER: rn.VotedFor, STATUS: rn.Status, COMITTED_INDEX: rn.commitedIndex, LOG_LEN: len(rn.CmdLog)})
+		rn := n.Value.(*raft.RaftNode)
+		restNodes = append(restNodes, RestNode{ID: rn.Id, TERM: rn.CurrentTerm, STATE: rn.State,
+			LEADER: rn.VotedFor, STATUS: rn.Status, COMITTED_INDEX: rn.CommitedIndex, LOG_LEN: len(rn.CmdLog)})
 
 	}
 	sort.Slice(restNodes, func(i, j int) bool {
@@ -66,31 +73,31 @@ func (server *RestServer) GetNodes() []RestNode {
 // @Summary      Change state of Node
 // @Description  Responds with the list of all books as JSON.
 // @Tags         node
-// @Param			id	path		int	true	"Node ID"
+// @Param			Id	path		int	true	"Node ID"
 // @Param			value	path		string	true	"New State"
 // @Produce      json
 // @Success      200
-// @Router       /node/{id}/state/{value} [post]
+// @Router       /node/{Id}/state/{value} [post]
 func (server *RestServer) ChangeState(c *gin.Context) {
 	fmt.Printf("changeState params= %v\n", c.Params)
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("Id"))
 	if err != nil {
-		msg := fmt.Sprintf("error with parameter id:%s", err.Error())
+		msg := fmt.Sprintf("error with parameter Id:%s", err.Error())
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": msg})
 		return
 	}
 
 	state := c.Param("value")
 
-	node, ok := ClusterInstance().Nodes[id]
+	node, ok := mgmt.ClusterInstance().Nodes[id]
 	if !ok {
-		r := fmt.Sprintf("node with id = %d not found", id)
+		r := fmt.Sprintf("node with Id = %d not found", id)
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": r})
 		return
 	}
 
-	err = node.switchToState(state)
+	err = node.SwitchToState(state)
 	if err != nil {
 		fmt.Printf("Error: %s", err.Error())
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -104,17 +111,17 @@ func (server *RestServer) ChangeState(c *gin.Context) {
 // @Summary      Change state of Node
 // @Description  Responds with the list of all books as JSON.
 // @Tags         node
-// @Param			id	path		int	true	"Node ID"
+// @Param			Id	path		int	true	"Node ID"
 // @Param			value	path		string	true	"New Status"
 // @Produce      json
 // @Success      200
-// @Router       /node/{id}/status/{value} [post]
+// @Router       /node/{Id}/status/{value} [post]
 func (server *RestServer) ChangeStatus(c *gin.Context) {
 	fmt.Printf("changeStatus params= %v\n", c.Params)
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.Atoi(c.Param("Id"))
 	if err != nil {
-		msg := fmt.Sprintf("error with parameter id:%s", err.Error())
+		msg := fmt.Sprintf("error with parameter Id:%s", err.Error())
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": msg})
 		return
 
@@ -122,9 +129,9 @@ func (server *RestServer) ChangeStatus(c *gin.Context) {
 
 	status := c.Param("value")
 
-	node, ok := ClusterInstance().Nodes[id]
+	node, ok := mgmt.ClusterInstance().Nodes[id]
 	if !ok {
-		r := fmt.Sprintf("node with id = %d not found", id)
+		r := fmt.Sprintf("node with Id = %d not found", id)
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": r})
 		return
 	}
@@ -147,21 +154,21 @@ func (m *RestServer) Command(c *gin.Context) {
 	cmd := c.Query("cmd")
 	fmt.Printf("Client comand %s\n", cmd)
 
-	m.clientNode.processRequest(cmd)
+	m.clientNode.ProcessRequest(cmd)
 
 	c.JSON(http.StatusOK, m.GetNodes())
 	return
 }
 
-func (server *RestServer) run() {
+func (server *RestServer) Run() {
 	gin.SetMode(gin.DebugMode)
 
 	router := gin.Default()
 	g1 := router.Group("/raft")
 
 	g1.GET("/nodes", server.Nodes)
-	g1.POST("/node/:id/state/:value", server.ChangeState)
-	g1.POST("/node/:id/status/:value", server.ChangeStatus)
+	g1.POST("/node/:Id/state/:value", server.ChangeState)
+	g1.POST("/node/:Id/status/:value", server.ChangeStatus)
 	g2 := router.Group("/raft/client")
 	g2.POST("/command", server.Command)
 
