@@ -3,8 +3,6 @@ package raft
 import (
 	"fmt"
 	"go.uber.org/zap"
-	"log"
-	"os"
 	"raft/nw"
 	"raft/raftApi"
 	"time"
@@ -85,16 +83,14 @@ type RaftNode struct {
 	logger *zap.SugaredLogger
 }
 
+func (rn RaftNode) String() string {
+	return fmt.Sprintf("node (%d,%s,%s) log:%d commitIndex:%d leader:%d", rn.Id, rn.State,
+		rn.Status, len(rn.CmdLog), rn.CommitedIndex, rn.leader.id)
+}
+
 func NewNode(id int, timeouts Timeout, config ClusterConfig,
 	incomingChan chan raftApi.MsgEvent,
 	outgoingChan chan raftApi.MsgEvent, logger *zap.Logger) *RaftNode {
-
-	fname := getLogName(id)
-	f, err := os.Create(fname)
-	if err != nil {
-		log.Fatal(err)
-	}
-	f.Close()
 
 	controlChan := make(chan raftApi.SystemEvent, nw.CHANNELSIZE)
 
@@ -111,7 +107,8 @@ func NewNode(id int, timeouts Timeout, config ClusterConfig,
 		Timeout:       timeouts,
 		logger:        logger.Sugar(),
 	}
-	rn.logger.Infof("Created node id: %d timeouts: %v", rn.Id, rn.Timeout)
+	rn.initCmdLog()
+	rn.logger.Infof("%s: created node ", *rn)
 	return rn
 }
 
@@ -124,11 +121,10 @@ func (rn *RaftNode) init() {
 	rn.switchToFollower(0)
 }
 
-func (rn *RaftNode) Send(msg *raftApi.MsgEvent) error {
-
+func (rn *RaftNode) Send(msg *raftApi.MsgEvent) {
+	rn.logger.Infof("%s: send msg %s", *rn, msg)
 	ch := rn.Node.OutgoingChan
 	ch <- *msg
-	return nil
 }
 
 func (rn *RaftNode) Run() {
@@ -172,8 +168,7 @@ func (rn *RaftNode) Run() {
 }
 
 func (rn *RaftNode) grantVote(newLeaderId int, newTerm int64) {
-	rs := fmt.Sprintf("node %d vote for %d\n", rn.Id, newLeaderId)
-	rn.print(rs)
+	rn.logger.Infof("%s grant vote to %d", *rn, newLeaderId)
 
 	rn.VotedFor = newLeaderId
 	rn.CurrentTerm = newTerm
@@ -183,6 +178,7 @@ func (rn *RaftNode) grantVote(newLeaderId int, newTerm int64) {
 }
 
 func (rn *RaftNode) SwitchToState(newState string) error {
+	rn.logger.Infof("%s switch to state %s", *rn, newState)
 	switch newState {
 	case Leader:
 		rn.switchToCandidate()
@@ -201,6 +197,7 @@ func (rn *RaftNode) SwitchToState(newState string) error {
 }
 
 func (rn *RaftNode) switchToFollower(leaderId int) {
+	rn.logger.Infof("%s switch to follower, leader:%d", *rn, leaderId)
 	rn.State = Follower
 	rn.leader = LeaderInfo{id: leaderId, leaderLastTS: time.Now()}
 }

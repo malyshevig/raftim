@@ -1,10 +1,8 @@
 package raft
 
 import (
-	"fmt"
 	"raft/nw"
 	"raft/raftApi"
-	"reflect"
 	"time"
 )
 
@@ -20,13 +18,13 @@ func (rn *RaftNode) candidateProcessEvent(ev any) {
 		return
 	}
 
-	rs := fmt.Sprintf("unexpected Event type %s\n", reflect.TypeOf(ev))
-	rn.print(rs)
+	rn.logger.Infof("%s unknown event %v", *rn, ev)
 	return
 }
 
 func (rn *RaftNode) switchToCandidate() {
-	rn.print("switch to candidate \n")
+	rn.logger.Infof("%s switch to candidae", *rn)
+
 	rn.CurrentTerm++
 	rn.State = Candidate
 	rn.VotedFor = rn.Id
@@ -52,7 +50,7 @@ func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
 	//rn.print(fmt.Sprintf("candidate event %d %d\n", rn.candidateElectionTs, rn.ElectionTimeoutMS))
 	if _, ok := se.Body.(raftApi.TimerTick); ok { // Idle Timeout
 		if nw.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
-			rn.print("reinit election")
+			rn.logger.Infof("%s reInit Election process", *rn)
 			rn.switchToCandidate()
 
 		}
@@ -60,11 +58,10 @@ func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
 }
 
 func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
-	rn.print(fmt.Sprintf("received msg = %v", message.Body))
+	rn.logger.Infof("%s process msg %v", *rn, message)
 
 	if vr, ok := message.Body.(raftApi.VoteResponse); ok {
 		vf := rn.getFollower(message.Srcid)
-		rn.print(fmt.Sprintf("vote response src=%d term=%d \n", message.Srcid, vr.Term))
 
 		if vf != nil {
 			vf.lastResponse = time.Now()
@@ -81,7 +78,7 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 	}
 
 	if vr, ok := message.Body.(raftApi.VoteRequest); ok {
-		rn.print(fmt.Sprintf("vote request src=%d term=%d \n", message.Srcid, vr.Term))
+
 		if rn.CurrentTerm < vr.Term {
 			rn.switchToFollower(message.Srcid)
 			rn.CurrentTerm = vr.Term
@@ -96,6 +93,7 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 
 	if ar, ok := message.Body.(raftApi.AppendEntries); ok {
 		if rn.CurrentTerm <= ar.Term {
+			rn.logger.Infof("%s recieved ae from %d with term %d", *rn, message.Srcid, ar.Term)
 			rn.CurrentTerm = ar.Term
 
 			rn.switchToFollower(message.Srcid)

@@ -1,10 +1,8 @@
 package raft
 
 import (
-	"fmt"
 	"raft/nw"
 	"raft/raftApi"
-	"reflect"
 	"time"
 )
 
@@ -19,8 +17,7 @@ func (rn *RaftNode) followerProcessEvent(ev any) {
 		return
 	}
 
-	rn.logger.Infow("")
-	fmt.Printf("unexpected Event type %s", reflect.TypeOf(ev))
+	rn.logger.Infow("%s unexpected Event type ", *rn)
 
 	return
 }
@@ -28,7 +25,8 @@ func (rn *RaftNode) followerProcessEvent(ev any) {
 func (rn *RaftNode) followerProcessSystemEvent(ev *raftApi.SystemEvent) {
 	if _, ok := ev.Body.(raftApi.TimerTick); ok { // Idle Timeout
 		if nw.IsTimeout(rn.followerLeaderIdleTs, time.Now(), rn.FollowerTimeoutMS) {
-			rn.print(fmt.Sprintf("switch to candidate followerLeaderIdleTs = %v\n", rn.followerLeaderIdleTs))
+			rn.logger.Infof("%s switch to candidate followerLeaderIdleTs = %v", *rn, rn.followerLeaderIdleTs)
+
 			rn.switchToCandidate()
 			return
 		}
@@ -36,6 +34,7 @@ func (rn *RaftNode) followerProcessSystemEvent(ev *raftApi.SystemEvent) {
 }
 
 func (rn *RaftNode) followerProcessMsgEvent(message *raftApi.MsgEvent) {
+	//rn.logger.Infof("%s follower process msg ", *rn)
 
 	if vr, ok := message.Body.(raftApi.VoteRequest); ok {
 		rn.followerProcessVoteRequest(message, vr)
@@ -55,7 +54,7 @@ func (rn *RaftNode) followerProcessMsgEvent(message *raftApi.MsgEvent) {
 		rn.Send(nw.Msg(rn.Id, message.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.leader.id}))
 		return
 	}
-	rn.print(fmt.Sprintf("unexpected Msg %v\n", reflect.TypeOf(message.Body)))
+	rn.logger.Infof("%s unexpected message type", *rn)
 
 }
 
@@ -64,7 +63,7 @@ func (rn *RaftNode) followerProcessAE(msg *raftApi.MsgEvent, ar raftApi.AppendEn
 		rn.sendAEResponse(ar.Id, msg.Srcid, false)
 		return
 	}
-	rn.print(fmt.Sprintf("follower recieved %v\n", ar))
+	rn.logger.Infof("%s follower process ae %s", *rn, ar)
 
 	rn.followerLeaderIdleTs = time.Now()
 	rn.leader.id = msg.Srcid
@@ -78,14 +77,16 @@ func (rn *RaftNode) followerProcessAE(msg *raftApi.MsgEvent, ar raftApi.AppendEn
 	startIndex := ar.LastLogIndex + 1
 	for _, entry := range ar.Entries {
 		rn.appendLogEntry(startIndex, entry)
-		rn.print(fmt.Sprintf("follower save %s\n", entry.Cmd))
+
+		rn.logger.Infof("%s follower save cmd:%s", *rn, entry.Cmd)
 		startIndex++
 	}
 
 	if ar.LeaderCommittedIndex > rn.CommitedIndex {
 		rn.saveLog(rn.CommitedIndex+1, ar.LeaderCommittedIndex)
 		rn.CommitedIndex = ar.LeaderCommittedIndex
-		rn.print(fmt.Sprintf("follower shift CommitedIndex to %d", rn.CommitedIndex))
+		rn.logger.Infof("%s follower shift CommitedIndex to %d", *rn, rn.CommitedIndex)
+
 	}
 
 	rn.sendAEResponse(ar.Id, msg.Srcid, true)
@@ -119,7 +120,6 @@ func (rn *RaftNode) followerProcessVoteRequest(msg *raftApi.MsgEvent, vr raftApi
 }
 
 func (rn *RaftNode) sendAEResponse(ae_id int, leaderId int, success bool) {
-	rn.print(fmt.Sprintf("follower Send ae response cmdLod=%d\n", len(rn.CmdLog)))
 	m := nw.Msg(rn.Id, leaderId, raftApi.AppendEntriesResponse{Ae_id: ae_id, Success: success, LastIndex: len(rn.CmdLog) - 1})
 	rn.Send(m)
 }

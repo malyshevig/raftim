@@ -66,8 +66,15 @@ type AppendEntries struct {
 }
 
 func (v AppendEntries) String() string {
-	return fmt.Sprintf("ae(Id:%d, Term:%d, len(Entries):%d, laslogIndex: %d, lastlogTerm: %d, LeaderCommittedIndex: %d)",
-		v.Id, v.Term, len(v.Entries), v.LastLogIndex, v.LastLogTerm, v.LeaderCommittedIndex)
+	s := ""
+	for _, e := range v.Entries {
+		s = s + e.Cmd + ","
+	}
+
+	s = "[" + s + "]"
+
+	return fmt.Sprintf("ae(Id:%d, Term:%d, Entries:%s, laslogIndex: %d, lastlogTerm: %d, LeaderCommittedIndex: %d)",
+		v.Id, v.Term, s, v.LastLogIndex, v.LastLogTerm, v.LeaderCommittedIndex)
 }
 
 type AppendEntriesResponse struct {

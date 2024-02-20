@@ -1,11 +1,19 @@
 package raft
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"raft/raftApi"
 )
+
+func (rn *RaftNode) initCmdLog() {
+	fname := getLogName(rn.Id)
+	f, err := os.Create(fname)
+	if err != nil {
+		log.Fatal(err)
+	}
+	f.Close()
+}
 
 func (rn *RaftNode) checkLog(index int, term int64) bool {
 	if index < 0 {
@@ -21,7 +29,7 @@ func (rn *RaftNode) checkLog(index int, term int64) bool {
 
 func (rn *RaftNode) appendLogEntry(startIndex int, entry raftApi.Entry) {
 	if startIndex < len(rn.CmdLog) {
-		rn.print(fmt.Sprintf("recieved Msg index %d already saved len(log)=%d", startIndex, len(rn.CmdLog)))
+		rn.logger.Infof("%s recieved msg index %d already saved len(log)=%d", *rn, startIndex, len(rn.CmdLog))
 	} else {
 		rn.CmdLog = append(rn.CmdLog, entry)
 	}
