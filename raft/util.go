@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"log"
 	"os"
-	"time"
 )
 
 func fileExists(filename string) bool {
@@ -53,21 +51,4 @@ func InitLogger(filename string) *zap.Logger {
 
 func getLogName(id int) string {
 	return fmt.Sprintf("./nodeLog%d.txt", id)
-}
-
-func (rn *RaftNode) print2(s string) {
-
-	fname := fmt.Sprintf("./log_%d.txt", rn.Id)
-
-	f, err := os.OpenFile(fname, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
-	str := fmt.Sprintf("%v: node %d term=%d state = %s %s \n", time.Now(), rn.Id, rn.CurrentTerm, rn.State, s)
-	_, err = f.WriteString(str)
-	if err != nil {
-		log.Fatal(err)
-	}
 }

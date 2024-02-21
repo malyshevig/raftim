@@ -103,3 +103,11 @@ func trace(ev raftApi.MsgEvent) {
 	s := fmt.Sprintf("%v: %d->%d: %s\n", ev.Ts, ev.Srcid, ev.Dstid, ev.Body)
 	f.WriteString(s)
 }
+
+type Node interface {
+	getIncomingChannel() chan raftApi.MsgEvent
+	setIncomingChannel(chan raftApi.MsgEvent)
+
+	getOutgoingChannel() chan raftApi.MsgEvent
+	setOutgoingChannel(chan raftApi.MsgEvent)
+}

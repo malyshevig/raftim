@@ -95,6 +95,6 @@ func Raft() {
 	server.Run()
 
 	go load.Load(clientNode)
-	go load.Load(clientNode)
+	//go load.Load(clientNode)
 	time.Sleep(1 * time.Hour)
 }
