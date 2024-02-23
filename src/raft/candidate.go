@@ -106,9 +106,5 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 		rn.Send(nw2.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
 		return
 	}
-	if _, ok := message.Body.(raftApi.LeaderDiscoveryRequest); ok {
-		//rn.Send(Msg(rn.Id, message.srcid, LeaderDiscoveryResponse{leaderId: 0}))
-		return
-	}
 
 }

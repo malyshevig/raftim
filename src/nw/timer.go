@@ -35,19 +35,16 @@ func IsTimeout(ts time.Time, now time.Time, intervalMS int) bool {
 	return now.After(targetTs)
 }
 
-type Rnd struct {
-	r *rand.Rand
-}
-
-func InitRand() *Rnd {
+func InitRandomizer() *rand.Rand {
 	src := rand.NewSource(time.Now().Unix())
 
-	return &Rnd{r: rand.New(src)}
-
+	return rand.New(src)
 }
 
-func (rs *Rnd) RandomiseTimeout(timeout int) int {
+var rnd = InitRandomizer()
+
+func RandomiseTimeout(timeout int) int {
 	div := timeout / 10
 
-	return timeout + rs.r.Intn(div) - div/2
+	return timeout + rnd.Intn(div) - div/2
 }

@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap"
 	"raft/src/nw"
 	"raft/src/raftApi"
+	"raft/src/util"
 	"time"
 )
 
@@ -52,7 +53,7 @@ func (t Timeout) String() string {
 
 type RaftNode struct {
 	Node
-	config raftApi.ClusterConfig
+	config nw.ClusterConfig
 
 	CurrentTerm          int64
 	State                string
@@ -62,9 +63,9 @@ type RaftNode struct {
 	followerLeaderIdleTs time.Time
 	leaderPingTs         time.Time
 
-	followers            map[int]*FollowerInfo
-	followersCommmitInfo CommitInfo
-	leader               LeaderInfo
+	followers           map[int]*FollowerInfo
+	followersCommitInfo CommitInfo
+	leader              LeaderInfo
 
 	Status        string
 	CmdLog        []raftApi.Entry
@@ -73,26 +74,32 @@ type RaftNode struct {
 
 	Timeout
 
-	pingNum int
-	ae_id   int
-
+	ae_id  int
 	logger *zap.SugaredLogger
 }
 
-func (rn RaftNode) GetIncomingChannel() *chan raftApi.MsgEvent {
-	return &rn.IncomingChan
+func (rn *RaftNode) GetIncomingChannel() chan raftApi.MsgEvent {
+	return rn.IncomingChan
 }
 
-func (rn RaftNode) SetIncomingChannel(c *chan raftApi.MsgEvent) {
-	rn.IncomingChan = *c
+func (rn *RaftNode) SetIncomingChannel(c chan raftApi.MsgEvent) {
+	rn.IncomingChan = c
 }
 
-func (rn RaftNode) GetOutgoingChannel() *chan raftApi.MsgEvent {
-	return &rn.OutgoingChan
+func (rn *RaftNode) GetOutgoingChannel() chan raftApi.MsgEvent {
+	return rn.OutgoingChan
 }
 
-func (rn RaftNode) SetOutgoingChannel(c *chan raftApi.MsgEvent) {
-	rn.OutgoingChan = *c
+func (rn *RaftNode) SetOutgoingChannel(c chan raftApi.MsgEvent) {
+	rn.OutgoingChan = c
+}
+
+func (rn *RaftNode) GetControlChannel() chan raftApi.SystemEvent {
+	return rn.ControlChan
+}
+
+func (rn *RaftNode) SetControlChannel(c chan raftApi.SystemEvent) {
+	rn.ControlChan = c
 }
 
 func (rn RaftNode) String() string {
@@ -100,10 +107,15 @@ func (rn RaftNode) String() string {
 		rn.Status, len(rn.CmdLog), rn.CommitedIndex, rn.leader.id)
 }
 
-func NewNode(id int, timeouts Timeout, config raftApi.ClusterConfig,
-	incomingChan chan raftApi.MsgEvent,
-	outgoingChan chan raftApi.MsgEvent, logger *zap.Logger) *RaftNode {
+func NewNode(id int, config nw.ClusterConfig) *RaftNode {
+	loggerFile := fmt.Sprintf("logs/node%d.log", id)
 
+	logger := util.InitLogger(loggerFile)
+	tm := nw.RandomiseTimeout(CandidateElectionTimeout)
+	timeouts := Timeout{ElectionTimeoutMS: tm, FollowerTimeoutMS: tm}
+
+	incomingChan := make(chan raftApi.MsgEvent, nw.CHANNELSIZE)
+	outgoingChan := make(chan raftApi.MsgEvent, nw.CHANNELSIZE)
 	controlChan := make(chan raftApi.SystemEvent, nw.CHANNELSIZE)
 
 	rn := &RaftNode{

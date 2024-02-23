@@ -14,7 +14,7 @@ func callWithMetrix(call func()) time.Duration {
 	return l.Duration()
 }
 
-func Load(node *client.ClientNode) {
+func Load(node *client.RaftClientNode) {
 	log.Printf("Load test start")
 	cmdNum := 1
 	for c := 0; c < 50000; {

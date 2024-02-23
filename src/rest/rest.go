@@ -14,10 +14,10 @@ import (
 )
 
 type RestServer struct {
-	clientNode *client.ClientNode
+	clientNode *client.RaftClientNode
 }
 
-func NewRestServer(clientNode *client.ClientNode) *RestServer {
+func NewRestServer(clientNode *client.RaftClientNode) *RestServer {
 	return &RestServer{clientNode: clientNode}
 }
 

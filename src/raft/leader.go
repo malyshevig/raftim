@@ -59,7 +59,6 @@ func (rn *RaftNode) ackCommands(from int, to int) {
 		msg := nw2.Msg(rn.Id, cmd.ClientId, raftApi.ClientCommandResponse{CmdId: cmd.MsgId, Success: true})
 		rn.Send(msg)
 	}
-
 }
 
 func (rn *RaftNode) syncFollowers(delay bool) {
@@ -71,7 +70,7 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 			continue
 		}
 
-		entriesToSend := []raftApi.Entry{}
+		var entriesToSend []raftApi.Entry
 		if fv.nextIndex < len(rn.CmdLog) {
 			entriesToSend = rn.CmdLog[fv.nextIndex:]
 		}
@@ -85,10 +84,9 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 			prevTerm = 0
 		}
 
-		//rs := fmt.Sprintf("sync %d num_entries= %d  index = %d  %v\n", fv.Id, len(entriesToSend), fv.nextIndex)
-		//rn.print(rs)
-		event := nw2.Msg(rn.Id, fv.id, raftApi.AppendEntries{Id: rn.ae_id, Entries: entriesToSend, LastLogIndex: fv.nextIndex - 1, Term: rn.CurrentTerm,
-			LastLogTerm: prevTerm, LeaderCommittedIndex: rn.CommitedIndex})
+		event := nw2.Msg(rn.Id, fv.id,
+			raftApi.AppendEntries{Id: rn.ae_id, Entries: entriesToSend, LastLogIndex: fv.nextIndex - 1,
+				Term: rn.CurrentTerm, LastLogTerm: prevTerm, LeaderCommittedIndex: rn.CommitedIndex})
 		rn.ae_id++
 		rn.Send(event)
 

@@ -8,23 +8,23 @@ import (
 )
 
 type NodeMock struct {
-	incomingChannel *chan raftApi.MsgEvent
-	outgoingChannel *chan raftApi.MsgEvent
+	incomingChannel chan raftApi.MsgEvent
+	outgoingChannel chan raftApi.MsgEvent
 }
 
-func (n *NodeMock) GetIncomingChannel() *chan raftApi.MsgEvent {
+func (n *NodeMock) GetIncomingChannel() chan raftApi.MsgEvent {
 	return n.incomingChannel
 }
 
-func (n *NodeMock) SetIncomingChannel(c *chan raftApi.MsgEvent) {
+func (n *NodeMock) SetIncomingChannel(c chan raftApi.MsgEvent) {
 	n.incomingChannel = c
 }
 
-func (n *NodeMock) GetOutgoingChannel() *chan raftApi.MsgEvent {
+func (n *NodeMock) GetOutgoingChannel() chan raftApi.MsgEvent {
 	return n.outgoingChannel
 }
 
-func (n *NodeMock) SetOutgoingChannel(c *chan raftApi.MsgEvent) {
+func (n *NodeMock) SetOutgoingChannel(c chan raftApi.MsgEvent) {
 	n.outgoingChannel = c
 }
 
@@ -46,8 +46,8 @@ func TestBuildNodesChain(t *testing.T) {
 		Dstid: 2,
 	}
 
-	*n_1.GetOutgoingChannel() <- m
-	m1 := <-*n_2.GetIncomingChannel()
+	n_1.GetOutgoingChannel() <- m
+	m1 := <-n_2.GetIncomingChannel()
 
 	assert.True(t, m.Srcid == m1.Srcid)
 	assert.True(t, n_1.incomingChannel != nil)

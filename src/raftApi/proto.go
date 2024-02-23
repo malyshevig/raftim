@@ -5,10 +5,6 @@ import (
 	"time"
 )
 
-type ClusterConfig struct {
-	Nodes []int
-}
-
 type SystemEvent struct {
 	Body interface{}
 }
@@ -27,6 +23,21 @@ type TimerTick struct {
 }
 
 // MsgEvent
+
+type LeaderDiscoveryRequest struct {
+}
+
+func (v LeaderDiscoveryRequest) String() string {
+	return fmt.Sprintf("leader_req()")
+}
+
+type LeaderDiscoveryResponse struct {
+	LeaderId int
+}
+
+func (v LeaderDiscoveryResponse) String() string {
+	return fmt.Sprintf("leader_resp(LeaderId: %d)", v.LeaderId)
+}
 
 type VoteRequest struct {
 	Term           int64
@@ -91,7 +102,6 @@ func (v AppendEntriesResponse) String() string {
 	return fmt.Sprintf("ae_resp(ae_id: %d, Success:%v, lastIndex:%d)", v.Ae_id, v.Success, v.LastIndex)
 }
 
-// ClientEvents
 type ClientCommand struct {
 	Id  int64
 	Cmd string
@@ -114,23 +124,4 @@ type ClientCommandResponse struct {
 
 func (v ClientCommandResponse) String() string {
 	return fmt.Sprintf("cmd_resp(Id: %d, Success:%v Leaderid:%d )", v.CmdId, v.Success, v.Leaderid)
-}
-
-func NewClientCommendResponse(success bool) *ClientCommandResponse {
-	return &ClientCommandResponse{Success: success}
-}
-
-type LeaderDiscoveryRequest struct {
-}
-
-func (v LeaderDiscoveryRequest) String() string {
-	return fmt.Sprintf("leader_req()")
-}
-
-type LeaderDiscoveryResponse struct {
-	LeaderId int
-}
-
-func (v LeaderDiscoveryResponse) String() string {
-	return fmt.Sprintf("leader_resp(LeaderId: %d)", v.LeaderId)
 }
