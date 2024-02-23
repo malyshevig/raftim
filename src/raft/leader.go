@@ -1,8 +1,8 @@
 package raft
 
 import (
-	"raft/nw"
-	"raft/raftApi"
+	nw2 "raft/src/nw"
+	"raft/src/raftApi"
 	"time"
 )
 
@@ -23,7 +23,7 @@ func (rn *RaftNode) leaderProcessEvent(ev interface{}) {
 
 func (rn *RaftNode) leaderProcessSystemEvent(ev *raftApi.SystemEvent) {
 	if _, ok := ev.Body.(raftApi.TimerTick); ok { // Idle Timeout
-		if nw.IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
+		if nw2.IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
 			rn.leaderPingTs = time.Now()
 			rn.sendPingToAll()
 		}
@@ -56,7 +56,7 @@ func (rn *RaftNode) switchToLeader() {
 func (rn *RaftNode) ackCommands(from int, to int) {
 	for idx := from; idx <= to; idx++ {
 		cmd := rn.CmdLog[idx]
-		msg := nw.Msg(rn.Id, cmd.ClientId, raftApi.ClientCommandResponse{CmdId: cmd.MsgId, Success: true})
+		msg := nw2.Msg(rn.Id, cmd.ClientId, raftApi.ClientCommandResponse{CmdId: cmd.MsgId, Success: true})
 		rn.Send(msg)
 	}
 
@@ -67,7 +67,7 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 
 	for _, fv := range rn.followers {
 
-		if delay && !nw.IsTimeout(fv.lastRequest, time.Now(), 10) {
+		if delay && !nw2.IsTimeout(fv.lastRequest, time.Now(), 10) {
 			continue
 		}
 
@@ -87,7 +87,7 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 
 		//rs := fmt.Sprintf("sync %d num_entries= %d  index = %d  %v\n", fv.Id, len(entriesToSend), fv.nextIndex)
 		//rn.print(rs)
-		event := nw.Msg(rn.Id, fv.id, raftApi.AppendEntries{Id: rn.ae_id, Entries: entriesToSend, LastLogIndex: fv.nextIndex - 1, Term: rn.CurrentTerm,
+		event := nw2.Msg(rn.Id, fv.id, raftApi.AppendEntries{Id: rn.ae_id, Entries: entriesToSend, LastLogIndex: fv.nextIndex - 1, Term: rn.CurrentTerm,
 			LastLogTerm: prevTerm, LeaderCommittedIndex: rn.CommitedIndex})
 		rn.ae_id++
 		rn.Send(event)
@@ -142,7 +142,7 @@ func (rn *RaftNode) leaderProcessMsgEvent(msg *raftApi.MsgEvent) {
 		return
 	}
 	if _, ok := msg.Body.(raftApi.LeaderDiscoveryRequest); ok {
-		rn.Send(nw.Msg(rn.Id, msg.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.Id}))
+		rn.Send(nw2.Msg(rn.Id, msg.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.Id}))
 		return
 	}
 

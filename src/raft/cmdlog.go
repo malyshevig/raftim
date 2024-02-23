@@ -3,16 +3,21 @@ package raft
 import (
 	"log"
 	"os"
-	"raft/raftApi"
+	"raft/src/raftApi"
+	"raft/src/util"
 )
 
 func (rn *RaftNode) initCmdLog() {
-	fname := getLogName(rn.Id)
+	fname := util.GetLogName(rn.Id)
 	f, err := os.Create(fname)
 	if err != nil {
 		log.Fatal(err)
 	}
-	f.Close()
+	err = f.Close()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 }
 
 func (rn *RaftNode) checkLog(index int, term int64) bool {
@@ -42,7 +47,7 @@ func (rn *RaftNode) saveLog(indexFrom int, indexTo int) {
 		return
 	}
 
-	f, err := os.OpenFile(getLogName(rn.Id), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(util.GetLogName(rn.Id), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}

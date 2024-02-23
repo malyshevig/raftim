@@ -1,6 +1,8 @@
 package raft
 
-import "raft/pq"
+import (
+	"raft/src/pq"
+)
 
 type CommitInfo struct {
 	pq      pq.PriorityQueue

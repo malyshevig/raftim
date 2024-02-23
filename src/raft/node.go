@@ -3,8 +3,8 @@ package raft
 import (
 	"fmt"
 	"go.uber.org/zap"
-	"raft/nw"
-	"raft/raftApi"
+	"raft/src/nw"
+	"raft/src/raftApi"
 	"time"
 )
 
@@ -19,10 +19,6 @@ type Node struct {
 	IncomingChan chan raftApi.MsgEvent
 	OutgoingChan chan raftApi.MsgEvent
 	ControlChan  chan raftApi.SystemEvent
-}
-
-type ClusterConfig struct {
-	Nodes []int
 }
 
 const (
@@ -56,7 +52,7 @@ func (t Timeout) String() string {
 
 type RaftNode struct {
 	Node
-	config ClusterConfig
+	config raftApi.ClusterConfig
 
 	CurrentTerm          int64
 	State                string
@@ -83,12 +79,28 @@ type RaftNode struct {
 	logger *zap.SugaredLogger
 }
 
+func (rn RaftNode) GetIncomingChannel() *chan raftApi.MsgEvent {
+	return &rn.IncomingChan
+}
+
+func (rn RaftNode) SetIncomingChannel(c *chan raftApi.MsgEvent) {
+	rn.IncomingChan = *c
+}
+
+func (rn RaftNode) GetOutgoingChannel() *chan raftApi.MsgEvent {
+	return &rn.OutgoingChan
+}
+
+func (rn RaftNode) SetOutgoingChannel(c *chan raftApi.MsgEvent) {
+	rn.OutgoingChan = *c
+}
+
 func (rn RaftNode) String() string {
 	return fmt.Sprintf("node (%d,%s,%s) log:%d commitIndex:%d leader:%d", rn.Id, rn.State,
 		rn.Status, len(rn.CmdLog), rn.CommitedIndex, rn.leader.id)
 }
 
-func NewNode(id int, timeouts Timeout, config ClusterConfig,
+func NewNode(id int, timeouts Timeout, config raftApi.ClusterConfig,
 	incomingChan chan raftApi.MsgEvent,
 	outgoingChan chan raftApi.MsgEvent, logger *zap.Logger) *RaftNode {
 

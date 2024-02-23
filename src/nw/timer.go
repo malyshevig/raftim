@@ -2,7 +2,7 @@ package nw
 
 import (
 	"math/rand"
-	"raft/raftApi"
+	"raft/src/raftApi"
 	"time"
 )
 
@@ -46,8 +46,8 @@ func InitRand() *Rnd {
 
 }
 
-func (rs *Rnd) RandomTimeoutMs(baseMs int) int {
-	div := baseMs / 10
+func (rs *Rnd) RandomiseTimeout(timeout int) int {
+	div := timeout / 10
 
-	return baseMs + rs.r.Intn(div) - div/2
+	return timeout + rs.r.Intn(div) - div/2
 }

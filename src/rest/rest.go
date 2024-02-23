@@ -6,9 +6,9 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"net/http"
-	"raft/client"
-	"raft/mgmt"
-	"raft/raft"
+	"raft/src/client"
+	"raft/src/mgmt"
+	"raft/src/raft"
 	"sort"
 	"strconv"
 )

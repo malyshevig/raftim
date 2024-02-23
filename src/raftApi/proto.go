@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+type ClusterConfig struct {
+	Nodes []int
+}
+
 type SystemEvent struct {
 	Body interface{}
 }

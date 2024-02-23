@@ -1,8 +1,8 @@
 package raft
 
 import (
-	"raft/nw"
-	"raft/raftApi"
+	nw2 "raft/src/nw"
+	"raft/src/raftApi"
 	"time"
 )
 
@@ -40,7 +40,7 @@ func (rn *RaftNode) switchToCandidate() {
 func (rn *RaftNode) sendVoteRequest(followers map[int]*FollowerInfo) {
 
 	for _, f := range followers {
-		m := nw.Msg(rn.Id, f.id, raftApi.VoteRequest{Term: rn.CurrentTerm, CommittedIndex: rn.CommitedIndex})
+		m := nw2.Msg(rn.Id, f.id, raftApi.VoteRequest{Term: rn.CurrentTerm, CommittedIndex: rn.CommitedIndex})
 		rn.Send(m)
 	}
 
@@ -49,7 +49,7 @@ func (rn *RaftNode) sendVoteRequest(followers map[int]*FollowerInfo) {
 func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
 	//rn.print(fmt.Sprintf("candidate event %d %d\n", rn.candidateElectionTs, rn.ElectionTimeoutMS))
 	if _, ok := se.Body.(raftApi.TimerTick); ok { // Idle Timeout
-		if nw.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
+		if nw2.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
 			rn.logger.Infof("%s reInit Election process", *rn)
 			rn.switchToCandidate()
 
@@ -103,7 +103,7 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 	}
 
 	if cmd, ok := message.Body.(raftApi.ClientCommand); ok {
-		rn.Send(nw.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
+		rn.Send(nw2.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
 		return
 	}
 	if _, ok := message.Body.(raftApi.LeaderDiscoveryRequest); ok {

@@ -1,8 +1,8 @@
 package raft
 
 import (
-	"raft/nw"
-	"raft/raftApi"
+	nw2 "raft/src/nw"
+	"raft/src/raftApi"
 	"time"
 )
 
@@ -24,7 +24,7 @@ func (rn *RaftNode) followerProcessEvent(ev any) {
 
 func (rn *RaftNode) followerProcessSystemEvent(ev *raftApi.SystemEvent) {
 	if _, ok := ev.Body.(raftApi.TimerTick); ok { // Idle Timeout
-		if nw.IsTimeout(rn.followerLeaderIdleTs, time.Now(), rn.FollowerTimeoutMS) {
+		if nw2.IsTimeout(rn.followerLeaderIdleTs, time.Now(), rn.FollowerTimeoutMS) {
 			rn.logger.Infof("%s switch to candidate followerLeaderIdleTs = %v", *rn, rn.followerLeaderIdleTs)
 
 			rn.switchToCandidate()
@@ -47,11 +47,11 @@ func (rn *RaftNode) followerProcessMsgEvent(message *raftApi.MsgEvent) {
 	}
 
 	if cmd, ok := message.Body.(raftApi.ClientCommand); ok {
-		rn.Send(nw.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
+		rn.Send(nw2.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
 		return
 	}
 	if _, ok := message.Body.(raftApi.LeaderDiscoveryRequest); ok {
-		rn.Send(nw.Msg(rn.Id, message.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.leader.id}))
+		rn.Send(nw2.Msg(rn.Id, message.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.leader.id}))
 		return
 	}
 	rn.logger.Infof("%s unexpected message type", *rn)
@@ -120,6 +120,6 @@ func (rn *RaftNode) followerProcessVoteRequest(msg *raftApi.MsgEvent, vr raftApi
 }
 
 func (rn *RaftNode) sendAEResponse(ae_id int, leaderId int, success bool) {
-	m := nw.Msg(rn.Id, leaderId, raftApi.AppendEntriesResponse{Ae_id: ae_id, Success: success, LastIndex: len(rn.CmdLog) - 1})
+	m := nw2.Msg(rn.Id, leaderId, raftApi.AppendEntriesResponse{Ae_id: ae_id, Success: success, LastIndex: len(rn.CmdLog) - 1})
 	rn.Send(m)
 }

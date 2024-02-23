@@ -1,4 +1,4 @@
-package raft
+package util
 
 import (
 	"fmt"
@@ -49,6 +49,6 @@ func InitLogger(filename string) *zap.Logger {
 	return zap.Must(cfg.Build())
 }
 
-func getLogName(id int) string {
+func GetLogName(id int) string {
 	return fmt.Sprintf("./nodeLog%d.txt", id)
 }

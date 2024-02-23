@@ -2,7 +2,7 @@ package mgmt
 
 import (
 	"container/list"
-	"raft/raft"
+	"raft/src/raft"
 )
 
 type Cluster struct {

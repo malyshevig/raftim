@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/wmentor/latency"
 	"log"
-	"raft/client"
+	"raft/src/client"
 	"time"
 )
 
