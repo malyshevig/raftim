@@ -6,6 +6,7 @@ import (
 	_ "raft/docs"
 	"raft/src/client"
 	"raft/src/load"
+	"raft/src/mgmt"
 	nw2 "raft/src/nw"
 	"raft/src/raft"
 	"raft/src/raftApi"
@@ -65,18 +66,20 @@ func main() {
 func StartServer() {
 	nodesNum := 3
 	config := makeClusterConfig(nodesNum)
+	cluster := mgmt.ClusterInstance()
 
 	router := nw2.CreateRouter(nil)
-	t := nw2.NewTickGenerator(make([]chan raftApi.SystemEvent, 0))
+	tickGenerator := nw2.NewTickGenerator(make([]chan raftApi.SystemEvent, 0))
 
 	for c := 0; c < nodesNum; c++ {
 		node := raft.NewNode(c+1, config)
 		delay := nw2.CreateDelay(nw2.DELAY)
 
 		nw2.BuildNodesChain(node, delay, router)
-		router.AddRoute(node.Id, node.IncomingChan)
 
-		t.AddChan(node.ControlChan)
+		router.AddRoute(node.Id, node.IncomingChan)
+		tickGenerator.Register(node.ControlChan)
+		cluster.NodeAdd(node)
 
 		go node.Run()
 		go delay.Run()
@@ -90,10 +93,10 @@ func StartServer() {
 	go delay.Run()
 
 	router.AddRoute(clientNode.Id, clientNode.IncomingChannel)
-	t.AddChan(clientNode.ControlChannel)
+	tickGenerator.Register(clientNode.ControlChannel)
 
 	go router.Run()
-	go t.Run(20)
+	go tickGenerator.Run(20)
 
 	server := rest.NewRestServer(clientNode)
 	server.Run()
@@ -132,10 +135,10 @@ func makeClusterConfig(nodesNum int) nw2.ClusterConfig {
 //	cluster.NodeAdd(n3)
 //
 //	t := nw2.NewTickGenerator(make([]chan raftApi.SystemEvent, 0))
-//	t.AddChan(clientNode.ControlChannel)
-//	t.AddChan(n1.ControlChan)
-//	t.AddChan(n2.ControlChan)
-//	t.AddChan(n3.ControlChan)
+//	t.Register(clientNode.ControlChannel)
+//	t.Register(n1.ControlChan)
+//	t.Register(n2.ControlChan)
+//	t.Register(n3.ControlChan)
 //
 //	go router.Run()
 //	go n1.Run()

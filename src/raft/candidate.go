@@ -47,7 +47,7 @@ func (rn *RaftNode) sendVoteRequest(followers map[int]*FollowerInfo) {
 }
 
 func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
-	//rn.print(fmt.Sprintf("candidate event %d %d\n", rn.candidateElectionTs, rn.ElectionTimeoutMS))
+
 	if _, ok := se.Body.(raftApi.TimerTick); ok { // Idle Timeout
 		if nw2.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
 			rn.logger.Infof("%s reInit Election process", *rn)

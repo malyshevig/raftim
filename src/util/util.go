@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"log"
 	"os"
 )
 
 func fileExists(filename string) bool {
 	f, err := os.Open(filename)
 	if err == nil {
-		f.Close()
+		err := f.Close()
+		if err != nil {
+			return false
+		}
 		return true
 	} else {
 		return false
@@ -25,10 +29,16 @@ func rotateLogFile(filename string) {
 	for c := 0; ; c++ {
 		fname := fmt.Sprintf("%s_%d", filename, c)
 		if !fileExists(fname) {
-			os.Rename(filename, fname)
+			err := os.Rename(filename, fname)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+
 			return
 		}
 	}
+
 }
 
 func InitLogger(filename string) *zap.Logger {

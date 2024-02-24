@@ -14,7 +14,7 @@ func NewTickGenerator(channels []chan raftApi.SystemEvent) *TickGenerator {
 	return &TickGenerator{channels: channels}
 }
 
-func (t *TickGenerator) AddChan(ch chan raftApi.SystemEvent) {
+func (t *TickGenerator) Register(ch chan raftApi.SystemEvent) {
 	t.channels = append(t.channels, ch)
 }
 
