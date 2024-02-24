@@ -1,0 +1,104 @@
+basePath: /raft
+definitions:
+  raft.RestNode:
+    properties:
+      id:
+        type: integer
+      leader:
+        type: integer
+      log:
+        items:
+          type: string
+        type: array
+      state:
+        type: string
+      status:
+        type: string
+      term:
+        type: integer
+    type: object
+host: localhost:1000
+info:
+  contact:
+    email: ilia.malishev@gmail.com
+    name: IM
+  description: Raft just for fun implementation
+  title: Raft Example
+  version: "1.0"
+paths:
+  /client/command:
+    post:
+      description: Responds with the list of all books as JSON.
+      parameters:
+      - description: string valid
+        in: query
+        maxLength: 200
+        minLength: 1
+        name: cmd
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Client Command
+      tags:
+      - books
+  /node/{id}/state/{value}:
+    post:
+      description: Responds with the list of all books as JSON.
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New State
+        in: path
+        name: value
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Change state of Node
+      tags:
+      - node
+  /node/{id}/status/{value}:
+    post:
+      description: Responds with the list of all books as JSON.
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New Status
+        in: path
+        name: value
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Change state of Node
+      tags:
+      - node
+  /nodes:
+    get:
+      description: Responds with the list of all books as JSON.
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/raft.RestNode'
+            type: array
+      summary: Get books array
+      tags:
+      - nodes
+swagger: "2.0"
