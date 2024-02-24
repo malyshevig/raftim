@@ -25,7 +25,9 @@ func (rn *RaftNode) leaderProcessSystemEvent(ev *raftApi.SystemEvent) {
 	if _, ok := ev.Body.(raftApi.TimerTick); ok { // Idle Timeout
 		if nw2.IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
 			rn.leaderPingTs = time.Now()
-			rn.sendPingToAll()
+
+			// Send ping to followers if needed
+			rn.syncFollowers(true)
 		}
 	}
 }
@@ -85,13 +87,18 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 		}
 
 		event := nw2.Msg(rn.Id, fv.id,
-			raftApi.AppendEntries{Id: rn.ae_id, Entries: entriesToSend, LastLogIndex: fv.nextIndex - 1,
-				Term: rn.CurrentTerm, LastLogTerm: prevTerm, LeaderCommittedIndex: rn.CommitedIndex})
+			raftApi.AppendEntries{
+				Id:                   rn.ae_id,
+				Term:                 rn.CurrentTerm,
+				Entries:              entriesToSend,
+				LastLogIndex:         fv.nextIndex - 1,
+				LastLogTerm:          prevTerm,
+				LeaderCommittedIndex: rn.CommitedIndex})
+
 		rn.ae_id++
 		rn.Send(event)
 
 		fv.lastRequest = time.Now()
-
 	}
 }
 
@@ -154,7 +161,6 @@ func (rn *RaftNode) leaderProcessMsgEvent(msg *raftApi.MsgEvent) {
 		return
 	}
 	rn.logger.Infof("%s unexpected message type ", *rn)
-	rn.logger.Infof("%s unexpected message type ", *rn)
 }
 
 func (rn *RaftNode) leaderProcessAEResponse(ev *raftApi.MsgEvent, ae raftApi.AppendEntriesResponse) bool {
@@ -168,8 +174,6 @@ func (rn *RaftNode) leaderProcessAEResponse(ev *raftApi.MsgEvent, ae raftApi.App
 		vf.nextIndex = ae.LastIndex + 1
 		vf.lastResponse = time.Now()
 
-		//			rs := fmt.Sprintf("response vf = %d vf.NextIndex=%d", vf.Id, vf.nextIndex)
-		//			rn.print(rs)
 		rn.commitInfo.updateFollowerIndex(vf)
 		committedIndex := rn.commitInfo.GetNewCommitIndex()
 
@@ -181,14 +185,12 @@ func (rn *RaftNode) leaderProcessAEResponse(ev *raftApi.MsgEvent, ae raftApi.App
 
 			rn.syncFollowers(true)
 		}
-	} else {
 	}
 	return false
 }
 
 func (rn *RaftNode) appendLog(msgId int64, clientId int, cmd string) {
 	rn.CmdLog = append(rn.CmdLog, raftApi.Entry{Term: rn.CurrentTerm, Cmd: cmd, ClientId: clientId, MsgId: msgId})
-	//logWriteStr(rn.Id, cmd)
 }
 
 func (rn *RaftNode) makeFollowers() map[int]*FollowerInfo {
