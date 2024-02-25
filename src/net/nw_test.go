@@ -1,30 +1,30 @@
-package nw
+package net
 
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"raft/src/raftApi"
+	"raft/src/proto"
 	"testing"
 )
 
 type NodeMock struct {
-	incomingChannel chan raftApi.MsgEvent
-	outgoingChannel chan raftApi.MsgEvent
+	incomingChannel chan proto.MsgEvent
+	outgoingChannel chan proto.MsgEvent
 }
 
-func (n *NodeMock) GetIncomingChannel() chan raftApi.MsgEvent {
+func (n *NodeMock) GetIncomingChannel() chan proto.MsgEvent {
 	return n.incomingChannel
 }
 
-func (n *NodeMock) SetIncomingChannel(c chan raftApi.MsgEvent) {
+func (n *NodeMock) SetIncomingChannel(c chan proto.MsgEvent) {
 	n.incomingChannel = c
 }
 
-func (n *NodeMock) GetOutgoingChannel() chan raftApi.MsgEvent {
+func (n *NodeMock) GetOutgoingChannel() chan proto.MsgEvent {
 	return n.outgoingChannel
 }
 
-func (n *NodeMock) SetOutgoingChannel(c chan raftApi.MsgEvent) {
+func (n *NodeMock) SetOutgoingChannel(c chan proto.MsgEvent) {
 	n.outgoingChannel = c
 }
 
@@ -41,7 +41,7 @@ func TestBuildNodesChain(t *testing.T) {
 		fmt.Println("Ok")
 	}
 
-	m := raftApi.MsgEvent{
+	m := proto.MsgEvent{
 		Srcid: 1,
 		Dstid: 2,
 	}

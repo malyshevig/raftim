@@ -1,4 +1,4 @@
-package raftApi
+package proto
 
 type Entry struct {
 	Term     int64

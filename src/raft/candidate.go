@@ -1,19 +1,19 @@
 package raft
 
 import (
-	nw2 "raft/src/nw"
-	"raft/src/raftApi"
+	net "raft/src/net"
+	"raft/src/proto"
 	"time"
 )
 
 func (rn *RaftNode) candidateProcessEvent(ev any) {
 
-	if se, ok := ev.(raftApi.SystemEvent); ok {
+	if se, ok := ev.(proto.SystemEvent); ok {
 		rn.candidateProcessSystemEvent(&se)
 		return
 	}
 
-	if msg, ok := ev.(raftApi.MsgEvent); ok {
+	if msg, ok := ev.(proto.MsgEvent); ok {
 		rn.candidateProcessMsgEvent(&msg)
 		return
 	}
@@ -40,16 +40,16 @@ func (rn *RaftNode) switchToCandidate() {
 func (rn *RaftNode) sendVoteRequest(followers map[int]*FollowerInfo) {
 
 	for _, f := range followers {
-		m := nw2.Msg(rn.Id, f.id, raftApi.VoteRequest{Term: rn.CurrentTerm, CommittedIndex: rn.CommitedIndex})
+		m := net.Msg(rn.Id, f.id, proto.VoteRequest{Term: rn.CurrentTerm, CommittedIndex: rn.CommitedIndex})
 		rn.Send(m)
 	}
 
 }
 
-func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
+func (rn *RaftNode) candidateProcessSystemEvent(se *proto.SystemEvent) {
 
-	if _, ok := se.Body.(raftApi.TimerTick); ok { // Idle Timeout
-		if nw2.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
+	if _, ok := se.Body.(proto.TimerTick); ok { // Idle Timeout
+		if net.IsTimeout(rn.candidateElectionTs, time.Now(), rn.ElectionTimeoutMS) {
 			rn.logger.Infof("%s reInit Election process", *rn)
 			rn.switchToCandidate()
 
@@ -57,10 +57,10 @@ func (rn *RaftNode) candidateProcessSystemEvent(se *raftApi.SystemEvent) {
 	}
 }
 
-func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
+func (rn *RaftNode) candidateProcessMsgEvent(message *proto.MsgEvent) {
 	rn.logger.Infof("%s process msg %v", *rn, message)
 
-	if vr, ok := message.Body.(raftApi.VoteResponse); ok {
+	if vr, ok := message.Body.(proto.VoteResponse); ok {
 		vf := rn.getFollower(message.Srcid)
 
 		if vf != nil {
@@ -77,7 +77,7 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 		return
 	}
 
-	if vr, ok := message.Body.(raftApi.VoteRequest); ok {
+	if vr, ok := message.Body.(proto.VoteRequest); ok {
 
 		if rn.CurrentTerm < vr.Term {
 			rn.switchToFollower(message.Srcid)
@@ -91,7 +91,7 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 		}
 	}
 
-	if ar, ok := message.Body.(raftApi.AppendEntries); ok {
+	if ar, ok := message.Body.(proto.AppendEntries); ok {
 		if rn.CurrentTerm <= ar.Term {
 			rn.logger.Infof("%s recieved ae from %d with term %d", *rn, message.Srcid, ar.Term)
 			rn.CurrentTerm = ar.Term
@@ -102,8 +102,8 @@ func (rn *RaftNode) candidateProcessMsgEvent(message *raftApi.MsgEvent) {
 		return
 	}
 
-	if cmd, ok := message.Body.(raftApi.ClientCommand); ok {
-		rn.Send(nw2.Msg(rn.Id, message.Srcid, raftApi.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
+	if cmd, ok := message.Body.(proto.ClientCommand); ok {
+		rn.Send(net.Msg(rn.Id, message.Srcid, proto.ClientCommandResponse{CmdId: cmd.Id, Success: false, Leaderid: rn.leader.id}))
 		return
 	}
 

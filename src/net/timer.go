@@ -1,20 +1,20 @@
-package nw
+package net
 
 import (
 	"math/rand"
-	"raft/src/raftApi"
+	"raft/src/proto"
 	"time"
 )
 
 type TickGenerator struct {
-	channels []chan raftApi.SystemEvent
+	channels []chan proto.SystemEvent
 }
 
-func NewTickGenerator(channels []chan raftApi.SystemEvent) *TickGenerator {
+func NewTickGenerator(channels []chan proto.SystemEvent) *TickGenerator {
 	return &TickGenerator{channels: channels}
 }
 
-func (t *TickGenerator) Register(ch chan raftApi.SystemEvent) {
+func (t *TickGenerator) Register(ch chan proto.SystemEvent) {
 	t.channels = append(t.channels, ch)
 }
 
@@ -22,7 +22,7 @@ func (t *TickGenerator) Run(tmMs int) {
 	for {
 		time.Sleep(time.Duration(int64(tmMs) * int64(time.Millisecond)))
 
-		msg := raftApi.SystemEvent{Body: raftApi.TimerTick{}}
+		msg := proto.SystemEvent{Body: proto.TimerTick{}}
 		for _, ch := range t.channels {
 			ch <- msg
 		}

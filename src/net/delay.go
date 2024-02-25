@@ -1,37 +1,37 @@
-package nw
+package net
 
 import (
-	"raft/src/raftApi"
+	"raft/src/proto"
 	"time"
 )
 
 type Delay struct {
-	IncomingChan chan raftApi.MsgEvent
-	OutgoingChan chan raftApi.MsgEvent
+	IncomingChan chan proto.MsgEvent
+	OutgoingChan chan proto.MsgEvent
 
 	delay int64
 }
 
-func (d *Delay) GetIncomingChannel() chan raftApi.MsgEvent {
+func (d *Delay) GetIncomingChannel() chan proto.MsgEvent {
 	return d.IncomingChan
 }
 
-func (d *Delay) SetIncomingChannel(c chan raftApi.MsgEvent) {
+func (d *Delay) SetIncomingChannel(c chan proto.MsgEvent) {
 	d.IncomingChan = c
 }
 
-func (d *Delay) GetOutgoingChannel() chan raftApi.MsgEvent {
+func (d *Delay) GetOutgoingChannel() chan proto.MsgEvent {
 	return d.OutgoingChan
 }
 
-func (d *Delay) SetOutgoingChannel(c chan raftApi.MsgEvent) {
+func (d *Delay) SetOutgoingChannel(c chan proto.MsgEvent) {
 	d.OutgoingChan = c
 }
 
 func CreateDelay(delay int64) *Delay {
 
-	incoming := make(chan raftApi.MsgEvent, CHANNELSIZE)
-	outgoing := make(chan raftApi.MsgEvent, CHANNELSIZE)
+	incoming := make(chan proto.MsgEvent, CHANNELSIZE)
+	outgoing := make(chan proto.MsgEvent, CHANNELSIZE)
 
 	return &Delay{delay: delay, IncomingChan: incoming, OutgoingChan: outgoing}
 }

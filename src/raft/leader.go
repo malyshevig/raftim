@@ -1,18 +1,18 @@
 package raft
 
 import (
-	nw2 "raft/src/nw"
-	"raft/src/raftApi"
+	"raft/src/net"
+	"raft/src/proto"
 	"time"
 )
 
 func (rn *RaftNode) leaderProcessEvent(ev interface{}) {
-	if se, ok := ev.(raftApi.SystemEvent); ok {
+	if se, ok := ev.(proto.SystemEvent); ok {
 		rn.leaderProcessSystemEvent(&se)
 		return
 	}
 
-	if msg, ok := ev.(raftApi.MsgEvent); ok {
+	if msg, ok := ev.(proto.MsgEvent); ok {
 		rn.leaderProcessMsgEvent(&msg)
 		return
 	}
@@ -21,9 +21,9 @@ func (rn *RaftNode) leaderProcessEvent(ev interface{}) {
 	return
 }
 
-func (rn *RaftNode) leaderProcessSystemEvent(ev *raftApi.SystemEvent) {
-	if _, ok := ev.Body.(raftApi.TimerTick); ok { // Idle Timeout
-		if nw2.IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
+func (rn *RaftNode) leaderProcessSystemEvent(ev *proto.SystemEvent) {
+	if _, ok := ev.Body.(proto.TimerTick); ok { // Idle Timeout
+		if net.IsTimeout(rn.leaderPingTs, time.Now(), LeaderPingInterval) {
 			rn.leaderPingTs = time.Now()
 
 			// Send ping to followers if needed
@@ -58,7 +58,7 @@ func (rn *RaftNode) switchToLeader() {
 func (rn *RaftNode) ackCommands(from int, to int) {
 	for idx := from; idx <= to; idx++ {
 		cmd := rn.CmdLog[idx]
-		msg := nw2.Msg(rn.Id, cmd.ClientId, raftApi.ClientCommandResponse{CmdId: cmd.MsgId, Success: true})
+		msg := net.Msg(rn.Id, cmd.ClientId, proto.ClientCommandResponse{CmdId: cmd.MsgId, Success: true})
 		rn.Send(msg)
 	}
 }
@@ -68,11 +68,11 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 
 	for _, fv := range rn.followers {
 
-		if delay && !nw2.IsTimeout(fv.lastRequest, time.Now(), 10) {
+		if delay && !net.IsTimeout(fv.lastRequest, time.Now(), 10) {
 			continue
 		}
 
-		var entriesToSend []raftApi.Entry
+		var entriesToSend []proto.Entry
 		if fv.nextIndex < len(rn.CmdLog) {
 			entriesToSend = rn.CmdLog[fv.nextIndex:]
 		}
@@ -86,8 +86,8 @@ func (rn *RaftNode) syncFollowers(delay bool) {
 			prevTerm = 0
 		}
 
-		event := nw2.Msg(rn.Id, fv.id,
-			raftApi.AppendEntries{
+		event := net.Msg(rn.Id, fv.id,
+			proto.AppendEntries{
 				Id:                   rn.ae_id,
 				Term:                 rn.CurrentTerm,
 				Entries:              entriesToSend,
@@ -115,10 +115,10 @@ func (rn *RaftNode) leaderCalculateNewCommitIndex() int {
 	return commit
 }
 
-func (rn *RaftNode) leaderProcessMsgEvent(msg *raftApi.MsgEvent) {
+func (rn *RaftNode) leaderProcessMsgEvent(msg *proto.MsgEvent) {
 	rn.logger.Infof("%s process message %s", *rn, msg)
 
-	if vr, ok := msg.Body.(raftApi.VoteRequest); ok {
+	if vr, ok := msg.Body.(proto.VoteRequest); ok {
 		if rn.CurrentTerm < vr.Term {
 			rn.CurrentTerm = vr.Term
 			rn.switchToFollower(0)
@@ -132,26 +132,26 @@ func (rn *RaftNode) leaderProcessMsgEvent(msg *raftApi.MsgEvent) {
 		return
 	}
 
-	if ae, ok := msg.Body.(raftApi.AppendEntriesResponse); ok {
+	if ae, ok := msg.Body.(proto.AppendEntriesResponse); ok {
 		rn.leaderProcessAEResponse(msg, ae)
 		return
 	}
 
-	if _, ok := msg.Body.(raftApi.VoteResponse); ok {
+	if _, ok := msg.Body.(proto.VoteResponse); ok {
 		return
 	}
 
-	if cmd, ok := msg.Body.(raftApi.ClientCommand); ok {
+	if cmd, ok := msg.Body.(proto.ClientCommand); ok {
 		rn.appendLog(cmd.Id, msg.Srcid, cmd.Cmd)
 		rn.syncFollowers(false)
 		return
 	}
-	if _, ok := msg.Body.(raftApi.LeaderDiscoveryRequest); ok {
-		rn.Send(nw2.Msg(rn.Id, msg.Srcid, raftApi.LeaderDiscoveryResponse{LeaderId: rn.Id}))
+	if _, ok := msg.Body.(proto.LeaderDiscoveryRequest); ok {
+		rn.Send(net.Msg(rn.Id, msg.Srcid, proto.LeaderDiscoveryResponse{LeaderId: rn.Id}))
 		return
 	}
 
-	if ae, ok := msg.Body.(raftApi.AppendEntries); ok {
+	if ae, ok := msg.Body.(proto.AppendEntries); ok {
 		if rn.CurrentTerm < ae.Term {
 			rn.logger.Infof("%s Leader recieved Append from the node %d with term = %d", *rn, msg.Srcid, ae.Term)
 
@@ -163,7 +163,7 @@ func (rn *RaftNode) leaderProcessMsgEvent(msg *raftApi.MsgEvent) {
 	rn.logger.Infof("%s unexpected message type ", *rn)
 }
 
-func (rn *RaftNode) leaderProcessAEResponse(ev *raftApi.MsgEvent, ae raftApi.AppendEntriesResponse) bool {
+func (rn *RaftNode) leaderProcessAEResponse(ev *proto.MsgEvent, ae proto.AppendEntriesResponse) bool {
 	if !ae.Success {
 		return true
 	}
@@ -190,7 +190,7 @@ func (rn *RaftNode) leaderProcessAEResponse(ev *raftApi.MsgEvent, ae raftApi.App
 }
 
 func (rn *RaftNode) appendLog(msgId int64, clientId int, cmd string) {
-	rn.CmdLog = append(rn.CmdLog, raftApi.Entry{Term: rn.CurrentTerm, Cmd: cmd, ClientId: clientId, MsgId: msgId})
+	rn.CmdLog = append(rn.CmdLog, proto.Entry{Term: rn.CurrentTerm, Cmd: cmd, ClientId: clientId, MsgId: msgId})
 }
 
 func (rn *RaftNode) makeFollowers() map[int]*FollowerInfo {

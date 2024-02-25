@@ -1,4 +1,4 @@
-package raftApi
+package proto
 
 import (
 	"time"

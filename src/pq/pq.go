@@ -2,7 +2,6 @@ package pq
 
 import (
 	"container/heap"
-	"fmt"
 )
 
 // An Item is something we manage in a priority queue.
@@ -59,7 +58,7 @@ func (pq *PriorityQueue) Pop() any {
 	return item
 }
 
-// update modifies the priority and value of an Item in the queue.
+// Update modifies the priority and value of an Item in the queue.
 func (pq *PriorityQueue) Update(item *Item, value interface{}, priority int) {
 	item.value = value
 	item.priority = priority
@@ -68,7 +67,7 @@ func (pq *PriorityQueue) Update(item *Item, value interface{}, priority int) {
 
 // This example creates a PriorityQueue with some items, adds and manipulates an item,
 // and then removes the items in priority order.
-func main() {
+/*func main() {
 	// Some items and their priorities.
 	items := map[string]int{
 		"banana": 3, "apple": 2, "pear": 4,
@@ -102,3 +101,4 @@ func main() {
 		fmt.Printf("%.2d:%s ", item.priority, item.value)
 	}
 }
+*/

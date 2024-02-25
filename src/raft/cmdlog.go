@@ -3,7 +3,7 @@ package raft
 import (
 	"log"
 	"os"
-	"raft/src/raftApi"
+	"raft/src/proto"
 	"raft/src/util"
 )
 
@@ -32,7 +32,7 @@ func (rn *RaftNode) checkLog(index int, term int64) bool {
 	return rn.CmdLog[index].Term == term
 }
 
-func (rn *RaftNode) appendLogEntry(startIndex int, entry raftApi.Entry) {
+func (rn *RaftNode) appendLogEntry(startIndex int, entry proto.Entry) {
 	if startIndex < len(rn.CmdLog) {
 		rn.logger.Infof("%s recieved msg index %d already saved len(log)=%d", *rn, startIndex, len(rn.CmdLog))
 	} else {

@@ -3,8 +3,8 @@ package raft
 import (
 	"fmt"
 	"go.uber.org/zap"
-	"raft/src/nw"
-	"raft/src/raftApi"
+	"raft/src/net"
+	"raft/src/proto"
 	"raft/src/util"
 	"time"
 )
@@ -17,9 +17,9 @@ const (
 
 type Node struct {
 	Id           int
-	IncomingChan chan raftApi.MsgEvent
-	OutgoingChan chan raftApi.MsgEvent
-	ControlChan  chan raftApi.SystemEvent
+	IncomingChan chan proto.MsgEvent
+	OutgoingChan chan proto.MsgEvent
+	ControlChan  chan proto.SystemEvent
 }
 
 const (
@@ -53,7 +53,7 @@ func (t Timeout) String() string {
 
 type RaftNode struct {
 	Node
-	config nw.ClusterConfig
+	config net.ClusterConfig
 
 	CurrentTerm          int64
 	State                string
@@ -68,7 +68,7 @@ type RaftNode struct {
 	leader              LeaderInfo
 
 	Status        string
-	CmdLog        []raftApi.Entry
+	CmdLog        []proto.Entry
 	commitInfo    *CommitInfo
 	CommitedIndex int
 
@@ -78,27 +78,27 @@ type RaftNode struct {
 	logger *zap.SugaredLogger
 }
 
-func (rn *RaftNode) GetIncomingChannel() chan raftApi.MsgEvent {
+func (rn *RaftNode) GetIncomingChannel() chan proto.MsgEvent {
 	return rn.IncomingChan
 }
 
-func (rn *RaftNode) SetIncomingChannel(c chan raftApi.MsgEvent) {
+func (rn *RaftNode) SetIncomingChannel(c chan proto.MsgEvent) {
 	rn.IncomingChan = c
 }
 
-func (rn *RaftNode) GetOutgoingChannel() chan raftApi.MsgEvent {
+func (rn *RaftNode) GetOutgoingChannel() chan proto.MsgEvent {
 	return rn.OutgoingChan
 }
 
-func (rn *RaftNode) SetOutgoingChannel(c chan raftApi.MsgEvent) {
+func (rn *RaftNode) SetOutgoingChannel(c chan proto.MsgEvent) {
 	rn.OutgoingChan = c
 }
 
-func (rn *RaftNode) GetControlChannel() chan raftApi.SystemEvent {
+func (rn *RaftNode) GetControlChannel() chan proto.SystemEvent {
 	return rn.ControlChan
 }
 
-func (rn *RaftNode) SetControlChannel(c chan raftApi.SystemEvent) {
+func (rn *RaftNode) SetControlChannel(c chan proto.SystemEvent) {
 	rn.ControlChan = c
 }
 
@@ -107,16 +107,16 @@ func (rn RaftNode) String() string {
 		rn.Status, len(rn.CmdLog), rn.CommitedIndex, rn.leader.id)
 }
 
-func NewNode(id int, config nw.ClusterConfig) *RaftNode {
+func NewNode(id int, config net.ClusterConfig) *RaftNode {
 	loggerFile := fmt.Sprintf("logs/node%d.log", id)
 
 	logger := util.InitLogger(loggerFile)
-	tm := nw.RandomiseTimeout(CandidateElectionTimeout)
+	tm := net.RandomiseTimeout(CandidateElectionTimeout)
 	timeouts := Timeout{ElectionTimeoutMS: tm, FollowerTimeoutMS: tm}
 
-	incomingChan := make(chan raftApi.MsgEvent, nw.CHANNELSIZE)
-	outgoingChan := make(chan raftApi.MsgEvent, nw.CHANNELSIZE)
-	controlChan := make(chan raftApi.SystemEvent, nw.CHANNELSIZE)
+	incomingChan := make(chan proto.MsgEvent, net.CHANNELSIZE)
+	outgoingChan := make(chan proto.MsgEvent, net.CHANNELSIZE)
+	controlChan := make(chan proto.SystemEvent, net.CHANNELSIZE)
 
 	rn := &RaftNode{
 		Node:          Node{Id: id, IncomingChan: incomingChan, OutgoingChan: outgoingChan, ControlChan: controlChan},
@@ -126,7 +126,7 @@ func NewNode(id int, config nw.ClusterConfig) *RaftNode {
 		Status:        Active,
 		VotedFor:      id,
 		CommitedIndex: -1,
-		CmdLog:        make([]raftApi.Entry, 0),
+		CmdLog:        make([]proto.Entry, 0),
 		followers:     make(map[int]*FollowerInfo),
 		Timeout:       timeouts,
 		logger:        logger.Sugar(),
@@ -145,7 +145,7 @@ func (rn *RaftNode) init() {
 	rn.switchToFollower(0)
 }
 
-func (rn *RaftNode) Send(msg *raftApi.MsgEvent) {
+func (rn *RaftNode) Send(msg *proto.MsgEvent) {
 	rn.logger.Infof("%s: send msg %s", *rn, msg)
 	ch := rn.Node.OutgoingChan
 	ch <- *msg
@@ -196,8 +196,8 @@ func (rn *RaftNode) grantVote(newLeaderId int, newTerm int64) {
 
 	rn.VotedFor = newLeaderId
 	rn.CurrentTerm = newTerm
-	//ev := MsgEvent{srcid: rn.Id, dstid: newLeaderId, Body: VoteResponse{Success: true, term: newTerm}}
-	ev := nw.Msg(rn.Id, newLeaderId, *raftApi.NewVoteResponse(newTerm, len(rn.CmdLog)-1, true))
+
+	ev := net.Msg(rn.Id, newLeaderId, *proto.NewVoteResponse(newTerm, len(rn.CmdLog)-1, true))
 	rn.Send(ev)
 }
 

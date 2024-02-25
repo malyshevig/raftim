@@ -1,10 +1,10 @@
-package nw
+package net
 
 import (
 	"fmt"
 	"log"
 	"os"
-	"raft/src/raftApi"
+	"raft/src/proto"
 	"time"
 )
 
@@ -17,8 +17,8 @@ const (
 	DELAY       = 100
 )
 
-func Msg(srcId int, dstId int, body interface{}) *raftApi.MsgEvent {
-	return &raftApi.MsgEvent{Srcid: srcId, Dstid: dstId, Body: body, Ts: time.Now()}
+func Msg(srcId int, dstId int, body interface{}) *proto.MsgEvent {
+	return &proto.MsgEvent{Srcid: srcId, Dstid: dstId, Body: body, Ts: time.Now()}
 }
 
 func initTrace() {
@@ -34,7 +34,7 @@ func initTrace() {
 	}(f)
 }
 
-func trace(ev raftApi.MsgEvent) {
+func trace(ev proto.MsgEvent) {
 	f, err := os.OpenFile("./trace.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -55,23 +55,23 @@ func trace(ev raftApi.MsgEvent) {
 }
 
 type NodeChainInf interface {
-	GetIncomingChannel() chan raftApi.MsgEvent
-	SetIncomingChannel(chan raftApi.MsgEvent)
+	GetIncomingChannel() chan proto.MsgEvent
+	SetIncomingChannel(chan proto.MsgEvent)
 
-	GetOutgoingChannel() chan raftApi.MsgEvent
-	SetOutgoingChannel(chan raftApi.MsgEvent)
+	GetOutgoingChannel() chan proto.MsgEvent
+	SetOutgoingChannel(chan proto.MsgEvent)
 }
 
 func makeInChannelIfNil(node NodeChainInf) {
 	if node.GetIncomingChannel() == nil {
-		channel := make(chan raftApi.MsgEvent, 100000)
+		channel := make(chan proto.MsgEvent, 100000)
 		node.SetIncomingChannel(channel)
 	}
 }
 
 func makeOutChannelIfNil(node NodeChainInf) {
 	if node.GetOutgoingChannel() == nil {
-		channel := make(chan raftApi.MsgEvent, 100000)
+		channel := make(chan proto.MsgEvent, 100000)
 		node.SetOutgoingChannel(channel)
 	}
 }
