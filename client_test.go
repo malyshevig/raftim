@@ -53,7 +53,7 @@ func killLeader(node *rest.RestNode) bool {
 func getLeader(nodes []rest.RestNode) *rest.RestNode {
 	var leader rest.RestNode
 	for _, c := range nodes {
-		if c.STATE == "leader" {
+		if c.STATE == "leader" && c.STATUS == "active" {
 			leader = c
 		}
 	}
@@ -62,7 +62,8 @@ func getLeader(nodes []rest.RestNode) *rest.RestNode {
 
 func checkNodes(nodes []rest.RestNode, leaderId int) bool {
 	for _, c := range nodes {
-		if c.LEADER != leaderId {
+		if c.STATE == "active" && c.LEADER != leaderId {
+
 			return false
 		}
 	}
@@ -82,6 +83,7 @@ func TestCheckLeader(t *testing.T) {
 	fmt.Printf("result = %v\n", leader)
 
 	killLeader(leader)
+	time.Sleep(time.Second * 10)
 
 	nodes = getNodes()
 	leader = getLeader(nodes)
