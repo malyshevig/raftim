@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -22,13 +23,18 @@ func NewRestServer(clientNode *client.RaftClientNode) *RestServer {
 }
 
 type RestNode struct {
-	ID             int    `json:"Id"`
-	TERM           int64  `json:"term"`
-	STATE          string `json:"state"`
-	STATUS         string `json:"status"`
-	LEADER         int    `json:"leader"`
-	LOG_LEN        int    `json:"log_len"`
-	COMITTED_INDEX int    `json:"comitted_index"`
+	ID              int    `json:"Id"`
+	TERM            int64  `json:"term"`
+	STATE           string `json:"state"`
+	STATUS          string `json:"status"`
+	LEADER          int    `json:"leader"`
+	LOG_LEN         int    `json:"log_len"`
+	COMMITTED_INDEX int    `json:"comitted_index"`
+}
+
+func (r RestNode) String() string {
+	res, _ := json.Marshal(r)
+	return string(res)
 }
 
 // @title           Raft Example
@@ -47,20 +53,20 @@ type RestNode struct {
 // @Tags         nodes
 // @Success		200	{array}		raft.RestNode
 // @Router       /nodes [get]
-func (server *RestServer) Nodes(c *gin.Context) {
+func (srv *RestServer) Nodes(c *gin.Context) {
 	fmt.Printf("Request GetNodes ")
-	restNodes := server.GetNodes()
+	restNodes := srv.GetNodes()
 	fmt.Printf("GetNodes: %d\n", len(restNodes))
 	c.IndentedJSON(http.StatusOK, restNodes)
 }
 
-func (server *RestServer) GetNodes() []RestNode {
+func (srv *RestServer) GetNodes() []RestNode {
 	nodes := mgmt.ClusterInstance().GetNodes()
 	var restNodes []RestNode
 	for n := nodes.Front(); n != nil; n = n.Next() {
 		rn := n.Value.(*raft.RaftNode)
 		restNodes = append(restNodes, RestNode{ID: rn.Id, TERM: rn.CurrentTerm, STATE: rn.State,
-			LEADER: rn.VotedFor, STATUS: rn.Status, COMITTED_INDEX: rn.CommitedIndex, LOG_LEN: len(rn.CmdLog)})
+			LEADER: rn.VotedFor, STATUS: rn.Status, COMMITTED_INDEX: rn.CommitedIndex, LOG_LEN: len(rn.CmdLog)})
 
 	}
 	sort.Slice(restNodes, func(i, j int) bool {
@@ -78,7 +84,7 @@ func (server *RestServer) GetNodes() []RestNode {
 // @Produce      json
 // @Success      200
 // @Router       /node/{Id}/state/{value} [post]
-func (server *RestServer) ChangeState(c *gin.Context) {
+func (srv *RestServer) ChangeState(c *gin.Context) {
 	fmt.Printf("changeState params= %v\n", c.Params)
 
 	id, err := strconv.Atoi(c.Param("Id"))
@@ -116,7 +122,7 @@ func (server *RestServer) ChangeState(c *gin.Context) {
 // @Produce      json
 // @Success      200
 // @Router       /node/{Id}/status/{value} [post]
-func (server *RestServer) ChangeStatus(c *gin.Context) {
+func (srv *RestServer) ChangeStatus(c *gin.Context) {
 	fmt.Printf("changeStatus params= %v\n", c.Params)
 
 	id, err := strconv.Atoi(c.Param("Id"))
@@ -148,29 +154,29 @@ func (server *RestServer) ChangeStatus(c *gin.Context) {
 // @Produce      json
 // @Success      200
 // @Router       /client/command [post]
-func (m *RestServer) Command(c *gin.Context) {
+func (srv *RestServer) Command(c *gin.Context) {
 	fmt.Printf("Client comand\n")
 
 	cmd := c.Query("cmd")
 	fmt.Printf("Client comand %s\n", cmd)
 
-	m.clientNode.ProcessRequest(cmd)
+	srv.clientNode.ProcessRequest(cmd)
 
-	c.JSON(http.StatusOK, m.GetNodes())
+	c.JSON(http.StatusOK, srv.GetNodes())
 	return
 }
 
-func (server *RestServer) Run() {
+func (srv *RestServer) Run() {
 	gin.SetMode(gin.DebugMode)
 
 	router := gin.Default()
 	g1 := router.Group("/raft")
 
-	g1.GET("/nodes", server.Nodes)
-	g1.POST("/node/:Id/state/:value", server.ChangeState)
-	g1.POST("/node/:Id/status/:value", server.ChangeStatus)
+	g1.GET("/nodes", srv.Nodes)
+	g1.POST("/node/:Id/state/:value", srv.ChangeState)
+	g1.POST("/node/:Id/status/:value", srv.ChangeStatus)
 	g2 := router.Group("/raft/client")
-	g2.POST("/command", server.Command)
+	g2.POST("/command", srv.Command)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 

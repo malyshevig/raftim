@@ -32,11 +32,6 @@ func (rn *RaftNode) leaderProcessSystemEvent(ev *proto.SystemEvent) {
 	}
 }
 
-func (rn *RaftNode) sendPingToAll() {
-	rn.logger.Infof("ping followers", "Node")
-	rn.syncFollowers(true)
-}
-
 func (rn *RaftNode) switchToLeader() {
 	rn.logger.Infof("%s switch to leader ", *rn)
 
