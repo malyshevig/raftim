@@ -40,19 +40,19 @@ func (rn *RaftNode) appendLogEntry(startIndex int, entry raftApi.Entry) {
 	}
 }
 
-var persist = true
-
 func (rn *RaftNode) saveLog(indexFrom int, indexTo int) {
-	if !persist {
-		return
-	}
 
 	f, err := os.OpenFile(util.GetLogName(rn.Id), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// remember to close the file
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(f)
 
 	if indexTo >= len(rn.CmdLog) {
 		indexTo = len(rn.CmdLog) - 1

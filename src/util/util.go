@@ -60,5 +60,5 @@ func InitLogger(filename string) *zap.Logger {
 }
 
 func GetLogName(id int) string {
-	return fmt.Sprintf("./nodeLog%d.txt", id)
+	return fmt.Sprintf("./data/nodeLog%d.txt", id)
 }

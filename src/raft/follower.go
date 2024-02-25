@@ -120,6 +120,6 @@ func (rn *RaftNode) followerProcessVoteRequest(msg *raftApi.MsgEvent, vr raftApi
 }
 
 func (rn *RaftNode) sendAEResponse(ae_id int, leaderId int, success bool) {
-	m := nw2.Msg(rn.Id, leaderId, raftApi.AppendEntriesResponse{Ae_id: ae_id, Success: success, LastIndex: len(rn.CmdLog) - 1})
+	m := nw2.Msg(rn.Id, leaderId, raftApi.AppendEntriesResponse{AeId: ae_id, Success: success, LastIndex: len(rn.CmdLog) - 1})
 	rn.Send(m)
 }
