@@ -3,6 +3,7 @@ package raft
 import (
 	"raft/src/net"
 	"raft/src/proto"
+	"raft/src/util"
 	"time"
 )
 
@@ -104,7 +105,7 @@ func (rn *RaftNode) leaderCalculateNewCommitIndex() int {
 		if commit == -1 {
 			commit = fv.nextIndex - 1
 		} else {
-			commit = min(commit, fv.nextIndex-1)
+			commit = util.Min(commit, fv.nextIndex-1)
 		}
 	}
 	return commit

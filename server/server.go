@@ -2,6 +2,7 @@ package server
 
 import (
 	"raft/src/client"
+	"raft/src/load"
 	"raft/src/mgmt"
 	"raft/src/net"
 	"raft/src/proto"
@@ -47,7 +48,7 @@ func StartServer() {
 	server := rest.NewRestServer(clientNode)
 	server.Run()
 
-	//go load.Load(clientNode)
+	go load.Load(clientNode)
 	//go load.Load(clientNode)
 }
 

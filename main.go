@@ -23,7 +23,6 @@ func main() {
 	}(logger)
 
 	sugar.Info("Raft Started")
-
 	server.StartServer()
 
 	time.Sleep(1 * time.Hour)

@@ -8,6 +8,15 @@ import (
 	"os"
 )
 
+func Min(a int, b int) int {
+	if a < b {
+		return a
+	}
+
+	return b
+
+}
+
 func fileExists(filename string) bool {
 	f, err := os.Open(filename)
 	if err == nil {
