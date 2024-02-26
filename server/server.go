@@ -2,7 +2,6 @@ package server
 
 import (
 	"raft/src/client"
-	"raft/src/load"
 	"raft/src/mgmt"
 	"raft/src/net"
 	"raft/src/proto"
@@ -10,7 +9,7 @@ import (
 	"raft/src/rest"
 )
 
-func StartServer() {
+func StartServer() bool {
 	nodesNum := 33
 	config := makeClusterConfig(nodesNum)
 	cluster := mgmt.ClusterInstance()
@@ -48,8 +47,9 @@ func StartServer() {
 	server := rest.NewRestServer(clientNode)
 	server.Run()
 
-	go load.Load(clientNode)
 	//go load.Load(clientNode)
+	//go load.Load(clientNode)
+	return true
 }
 
 func makeClusterConfig(nodesNum int) net.ClusterConfig {

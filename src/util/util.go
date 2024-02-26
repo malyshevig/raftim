@@ -2,10 +2,12 @@ package util
 
 import (
 	"fmt"
+	"github.com/wmentor/latency"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"log"
 	"os"
+	"time"
 )
 
 func Min(a int, b int) int {
@@ -70,4 +72,10 @@ func InitLogger(filename string) *zap.Logger {
 
 func GetLogName(id int) string {
 	return fmt.Sprintf("./data/nodeLog%d.txt", id)
+}
+
+func CallWithMetrix(call func()) time.Duration {
+	l := latency.New()
+	call()
+	return l.Duration()
 }

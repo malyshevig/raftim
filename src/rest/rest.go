@@ -155,14 +155,14 @@ func (srv *RestServer) ChangeStatus(c *gin.Context) {
 // @Success      200
 // @Router       /client/command [post]
 func (srv *RestServer) Command(c *gin.Context) {
-	fmt.Printf("Client comand\n")
-
 	cmd := c.Query("cmd")
-	fmt.Printf("Client comand %s\n", cmd)
+	err := srv.clientNode.ProcessRequest(cmd)
 
-	srv.clientNode.ProcessRequest(cmd)
-
-	c.JSON(http.StatusOK, srv.GetNodes())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, srv.GetNodes())
+	} else {
+		c.JSON(http.StatusOK, srv.GetNodes())
+	}
 	return
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -12,10 +13,8 @@ import (
 	"time"
 )
 
-var url = "http://localhost:1000/raft/nodes"
-var client = &http.Client{}
-
-func getNodes() []rest.RestNode {
+func getNodes(client *http.Client) []rest.RestNode {
+	url := "http://localhost:1000/raft/nodes"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -37,6 +36,8 @@ func getNodes() []rest.RestNode {
 }
 
 func killLeader(node *rest.RestNode) bool {
+	var client = &http.Client{}
+
 	url := fmt.Sprintf("http://localhost:1000/raft/node/%d/status/fail", node.ID)
 
 	req, err := http.NewRequest("POST", url, nil)
@@ -70,12 +71,9 @@ func checkNodes(nodes []rest.RestNode, leaderId int) bool {
 	return true
 }
 
-func TestCheckLeader(t *testing.T) {
-	server.StartServer()
+func testKillLeader(t *testing.T, client *http.Client) {
 
-	time.Sleep(time.Second * 10)
-
-	nodes := getNodes()
+	nodes := getNodes(client)
 	leader := getLeader(nodes)
 
 	assert.True(t, leader.ID > 0)
@@ -85,25 +83,40 @@ func TestCheckLeader(t *testing.T) {
 	killLeader(leader)
 	time.Sleep(time.Second * 10)
 
-	nodes = getNodes()
+	nodes = getNodes(client)
 	leader = getLeader(nodes)
 	fmt.Printf("newLeader = %v\n", leader)
 	assert.True(t, leader.ID > 0)
 	assert.True(t, checkNodes(nodes, leader.ID))
-
 }
 
-/*
-func TestCheckKillLeader(t *testing.T) {
-	server.StartServer()
+func testPostCommand(t *testing.T, client *http.Client) {
+	url := fmt.Sprintf("http://localhost:1000/raft/client/command")
 
+	body := []byte(`{
+		"cmd": "Hello",
+	}`)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err2 := client.Do(req)
+	if err2 != nil {
+		log.Fatal(err)
+	}
+	assert.True(t, resp.StatusCode == 200)
+}
+
+func TestPack(t *testing.T) {
+	server.StartServer()
+	var client = &http.Client{}
 	time.Sleep(time.Second * 10)
 
-	nodes := getNodes()
-	leader := getLeader(nodes)
-
-	assert.True(t, leader.ID > 0)
-	assert.True(t, checkNodes(nodes, leader.ID))
-	fmt.Printf("result = %v\n", leader)
+	t.Run("killLeader", func(t *testing.T) {
+		testKillLeader(t, client)
+	})
+	t.Run("postCommands", func(t *testing.T) {
+		testPostCommand(t, client)
+	})
 }
-*/
