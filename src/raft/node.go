@@ -164,26 +164,38 @@ func (rn *RaftNode) Run() {
 		case controlEvent := <-rn.ControlChan:
 			switch rn.State {
 			case Leader:
-				rn.leaderProcessSystemEvent(&controlEvent)
+				if rn.Status == Active {
+					rn.leaderProcessSystemEvent(&controlEvent)
+				}
 				break
 			case Follower:
-				rn.followerProcessSystemEvent(&controlEvent)
+				if rn.Status == Active {
+					rn.followerProcessSystemEvent(&controlEvent)
+				}
 				break
 			case Candidate:
-				rn.candidateProcessSystemEvent(&controlEvent)
+				if rn.Status == Active {
+					rn.candidateProcessSystemEvent(&controlEvent)
+				}
 				break
 			}
 
 		case msgEvent := <-rn.IncomingChan:
 			switch rn.State {
 			case Leader:
-				rn.leaderProcessMsgEvent(&msgEvent)
+				if rn.Status == Active {
+					rn.leaderProcessMsgEvent(&msgEvent)
+				}
 				break
 			case Follower:
-				rn.followerProcessMsgEvent(&msgEvent)
+				if rn.Status == Active {
+					rn.followerProcessMsgEvent(&msgEvent)
+				}
 				break
 			case Candidate:
-				rn.candidateProcessMsgEvent(&msgEvent)
+				if rn.Status == Active {
+					rn.candidateProcessMsgEvent(&msgEvent)
+				}
 				break
 			}
 		}

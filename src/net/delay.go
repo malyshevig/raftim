@@ -9,7 +9,7 @@ type Delay struct {
 	IncomingChan chan proto.MsgEvent
 	OutgoingChan chan proto.MsgEvent
 
-	delay int64
+	delay int
 }
 
 func (d *Delay) GetIncomingChannel() chan proto.MsgEvent {
@@ -28,7 +28,7 @@ func (d *Delay) SetOutgoingChannel(c chan proto.MsgEvent) {
 	d.OutgoingChan = c
 }
 
-func CreateDelay(delay int64) *Delay {
+func CreateDelay(delay int) *Delay {
 
 	incoming := make(chan proto.MsgEvent, CHANNELSIZE)
 	outgoing := make(chan proto.MsgEvent, CHANNELSIZE)
@@ -42,7 +42,8 @@ func (d *Delay) Run() {
 		msg := x
 
 		current := time.Now()
-		targetTs := msg.Ts.Add(time.Duration(d.delay) * time.Microsecond)
+
+		targetTs := msg.Ts.Add(time.Duration(RandomiseTimeout(d.delay)) * time.Microsecond)
 		sleepDuration := targetTs.Sub(current)
 		if sleepDuration > 0 {
 			time.Sleep(sleepDuration)
